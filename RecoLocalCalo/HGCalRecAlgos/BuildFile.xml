@@ -10,6 +10,7 @@
 <use name="Geometry/HcalTowerAlgo"/>
 <use name="Geometry/Records"/>
 <use name="DataFormats/ParticleFlowReco"/>
+<use name="HeterogeneousCore/CUDAUtilities"/>
 <export>
   <lib   name="1"/>
 </export>

@@ -15,6 +15,7 @@
 #include "DataFormats/EgammaReco/interface/BasicCluster.h"
 
 #include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
+#include "RecoLocalCalo/HGCalRecAlgos/interface/BinnerGPU.h"
 
 // C/C++ headers
 #include <string>
@@ -24,6 +25,9 @@
 
 #include "KDTreeLinkerAlgoT.h"
 
+#include "HeterogeneousCore/CUDAUtilities/interface/GPUVecArray.h"
+
+using namespace BinnerGPU;
 
 template <typename T>
 std::vector<size_t> sorted_indices(const std::vector<T> &v) {
@@ -86,7 +90,8 @@ enum VerbosityLevel { pDEBUG = 0, pWARNING = 1, pINFO = 2, pERROR = 3 };
         minpos_(2*(maxlayer+1),{
                 {0.0f,0.0f}
         }),
-        maxpos_(2*(maxlayer+1),{ {0.0f,0.0f} })
+        maxpos_(2*(maxlayer+1),{ {0.0f,0.0f} }),
+        recHitsGPU(2*(maxlayer+1))
 {
 }
 
@@ -121,7 +126,8 @@ HGCalImagingAlgo(const std::vector<double>& thresholdW0_in, const std::vector<do
         minpos_(2*(maxlayer+1),{
                 {0.0f,0.0f}
         }),
-        maxpos_(2*(maxlayer+1),{ {0.0f,0.0f} })
+	maxpos_(2*(maxlayer+1),{ {0.0f,0.0f} }),
+        recHitsGPU(2*(maxlayer+1))
 {
 }
 
@@ -152,6 +158,11 @@ void reset(){
         {
                 it.clear();
                 std::vector<KDNode>().swap(it);
+        }
+        for( auto& it: recHitsGPU)
+        {
+                it.clear();
+                std::vector<RecHitGPU>().swap(it);
         }
         for(unsigned int i = 0; i < minpos_.size(); i++)
         {
@@ -289,11 +300,26 @@ inline double distance2(const Hexel &pt1, const Hexel &pt2) const{   //distance 
         const double dy = pt1.y - pt2.y;
         return (dx*dx + dy*dy);
 }   //distance squaredq
+inline double distance2GPU(const RecHitGPU &pt1, const RecHitGPU &pt2) const{   //distance squared
+        const double dx = pt1.x - pt2.x;
+        const double dy = pt1.y - pt2.y;
+        return (dx*dx + dy*dy);
+}   //distance squaredq
 inline double distance(const Hexel &pt1, const Hexel &pt2) const{   //2-d distance on the layer (x-y)
         return std::sqrt(distance2(pt1,pt2));
 }
+inline double distanceCPU(const RecHitGPU &pt1, const RecHitGPU &pt2) const{   //distance squared
+         const double dx = pt1.x - pt2.x;
+         const double dy = pt1.y - pt2.y;
+         return std::sqrt(dx*dx + dy*dy);
+ } 
+
 double calculateLocalDensity(std::vector<KDNode> &, KDTree &, const unsigned int) const;   //return max density
+double calculateLocalDensityGPU(Histo2D, LayerRecHitsGPU , unsigned int,std::vector<double>) const;
+double calculateLocalDensityCPU(Histo2D, LayerRecHitsGPU &, const unsigned int) const;
+
 double calculateDistanceToHigher(std::vector<KDNode> &) const;
+double calculateDistanceToHigherGPU(std::vector<RecHitGPU> &nd) const;
 int findAndAssignClusters(std::vector<KDNode> &, KDTree &, double, KDTreeBox &, const unsigned int, std::vector<std::vector<KDNode> >&) const;
 math::XYZPoint calculatePosition(std::vector<KDNode> &) const;
 
@@ -305,6 +331,21 @@ double calculateEnergyWithFraction(const std::vector<KDNode>&, const std::vector
 void shareEnergy(const std::vector<KDNode>&,
                  const std::vector<unsigned>&,
                  std::vector<std::vector<double> >&);
+
+
+HgcRecHitsGPU recHitsGPU;
+
+
 };
+
+namespace HGCalRecAlgos {
+        double calculateLocalDensityGPU(BinnerGPU::Histo2D theHist, const LayerRecHitsGPU theHits, const unsigned int layer,std::vector<double> vecDeltas_);
+        void launch_kenrel_compute_distance_ToHigher(
+                std::vector<RecHitGPU>& nd,
+                std::vector<size_t>& rs,
+                int& nearestHigher,
+                const double max_dist2
+        );
+}
 
 #endif
