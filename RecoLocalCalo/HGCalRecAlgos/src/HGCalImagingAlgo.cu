@@ -60,46 +60,6 @@ namespace HGCalRecAlgos{
 
 
 
-  //   size_t binIndexOne = threadIdx.x;
-  //   size_t binSizeOne  = theHist->data_[binIndexOne].size();
-
-  //   for (unsigned int i = 0; i<binSize; i++) {
-  //     int idOne = (theHist->data_[binIndexOne])[i];
-
-
-
-
-  //     int search_box[4] = theHist.searchBox(theHits[idOne].x - delta_c, theHits[idOne].x + delta_c, theHits[idOne].y - delta_c, theHits[idOne].y + delta_c);
-    
-  //     //std::cout << " and search_box is " << search_box[0] << " " << search_box[1] << " " << search_box[2] << " " << search_box[3] << std::endl;
-  //     for(int xBin = search_box[0]; xBin < search_box[1]+1; ++xBin) {
-  //       for(int yBin = search_box[2]; yBin < search_box[3]+1; ++yBin) {
-        
-  //         size_t binIndexTwo = theHist.getBinIdx_byBins(xBin,yBin);
-  //         size_t binSizeTwo  = theHist->data_[binIndexTwo].size();
-
-  //         for (unsigned int j = 0; j < binIndexTwo; j++) {
-  //           int idTwo = (theHist->data_[binIndexTwo])[j];
-  //           double dx = theHits[idOne].x - theHits[idTwo].x;
-  //           double dy = theHits[idOne].y - theHits[idTwo].y;
-
-  //           double distance = sqrt(dx*dx + dy*dy);
-  //           if(distance < delta_c) {
-  //             theHits[idOne].rho += theHits[idTwo].weight;
-  //           }
-  //         }
-      
-  //     // printf("%f ", theHits[idOne].rho);
-
-  //     // theHits[0].rho=2.7;
-  //     // theHits[idOne].rho = 2.3;
-  //   }
-
-  //   // theHits[0].rho=3.7;
-  //   // printf("%f ", 3.7);
-  // } //kernel
-
-
   double calculateLocalDensity_BinGPU( const BinnerGPU::Histo2D& theHist, LayerRecHitsGPU& theHits, const unsigned int layer, std::vector<double> vecDeltas_) {
 
     double maxdensity = 0.;
