@@ -8,7 +8,7 @@
 namespace BinnerGPU {
 
 
-  __global__ void kernel_compute_histogram(RecHitGPU*dInputData, Histo2D *dOutputData, const size_t numRechits) {
+  __global__ void kernel_compute_histogram(RecHitGPU *dInputData, Histo2D *dOutputData, const size_t numRechits) {
 
     size_t rechitLocation = blockIdx.x * blockDim.x + threadIdx.x;
 
