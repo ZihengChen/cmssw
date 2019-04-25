@@ -319,7 +319,8 @@ double calculateLocalDensity_BinCPU(Histo2D, LayerRecHitsGPU &, const unsigned i
 
 
 double calculateDistanceToHigher(std::vector<KDNode> &nd) const;
-double calculateDistanceToHigher_BinCPU(std::vector<RecHitGPU> &nd) const;
+double calculateDistanceToHigher_BinCPU(Histo2D, LayerRecHitsGPU &, const unsigned int) const;
+// double calculateDistanceToHigher_BinCPU(std::vector<RecHitGPU> &nd) const;
 
 int findAndAssignClusters(std::vector<KDNode> &, KDTree &, double, KDTreeBox &, const unsigned int, std::vector<std::vector<KDNode> >&) const;
 math::XYZPoint calculatePosition(std::vector<KDNode> &) const;
@@ -337,7 +338,7 @@ HgcRecHitsGPU recHitsGPU;
 };
 
 namespace HGCalRecAlgos {
-        double calculateLocalDensity_BinGPU(const BinnerGPU::Histo2D &theHist, LayerRecHitsGPU &theHits, const unsigned int layer, std::vector<double> vecDeltas_);
+        double calculateLocalDensity_DistanceToHigher_BinGPU(const BinnerGPU::Histo2D &theHist, LayerRecHitsGPU &theHits, const unsigned int layer, std::vector<double> vecDeltas_);
         // double calculateDistanceToHigher_BinGPU()
         // void launch_kenrel_compute_distance_ToHigher(
         //         std::vector<RecHitGPU>& nd,

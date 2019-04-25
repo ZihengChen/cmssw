@@ -58,9 +58,62 @@ namespace HGCalRecAlgos{
   } //kernel
 
 
+  __global__ void kernel_compute_distanceToHigher(Histo2D* theHist, RecHitGPU* theHits, float delta_c, int theHitsSize) {
+
+    size_t idOne = threadIdx.x;
+    // int temp = theHist->getBinIdx_byBins(1,1);
+
+    if (idOne < theHitsSize){
+      // initialize delta and nearest higer for i
+      float i_delta = 2000.0;
+      int i_nearestHigher = -1;
+
+      // by default, ith hit takes the initialized value
+      theHits[idOne].delta = i_delta;
+      theHits[idOne].nearestHigher = i_nearestHigher;
 
 
-  double calculateLocalDensity_BinGPU( const BinnerGPU::Histo2D& theHist, LayerRecHitsGPU& theHits, const unsigned int layer, std::vector<double> vecDeltas_) {
+      int xBinMin = theHist->computeXBinIndex(std::max(float(theHits[idOne].x - delta_c), theHist->limits_[0]));
+      int xBinMax = theHist->computeXBinIndex(std::min(float(theHits[idOne].x + delta_c), theHist->limits_[1]));
+      int yBinMin = theHist->computeYBinIndex(std::max(float(theHits[idOne].y - delta_c), theHist->limits_[2]));
+      int yBinMax = theHist->computeYBinIndex(std::min(float(theHits[idOne].y + delta_c), theHist->limits_[3]));
+
+      // loop over all bins in the search box
+      for(int xBin = xBinMin; xBin < xBinMax+1; ++xBin) {
+        for(int yBin = yBinMin; yBin < yBinMax+1; ++yBin) {
+          
+          size_t binIndex = theHist->getBinIdx_byBins(xBin,yBin);
+          size_t binSize  = theHist->data_[binIndex].size();
+
+          // loop over all hits in this bin
+          for (unsigned int j = 0; j < binSize; j++) {
+            int idTwo = (theHist->data_[binIndex])[j];
+
+            double distance = sqrt(distance2GPU(theHits[idOne], theHits[idTwo]));
+            bool foundHigher = theHits[idTwo].rho > theHits[idOne].rho;
+
+            if(distance < i_delta && foundHigher) {
+              // update i_delta
+              i_delta = distance;
+              // update i_nearestHigher
+              i_nearestHigher = idTwo;
+            }
+          }
+        }
+      }
+
+      // if i is not a seed or noise
+      if (i_delta < delta_c){
+        // pass i_delta and i_nearestHigher to ith hit
+        theHits[idOne].delta = i_delta;
+        theHits[idOne].nearestHigher = i_nearestHigher;
+      }
+
+    }
+  } //kernel
+
+
+  double calculateLocalDensity_DistanceToHigher_BinGPU( const BinnerGPU::Histo2D& theHist, LayerRecHitsGPU& theHits, const unsigned int layer, std::vector<double> vecDeltas_) {
 
     double maxdensity = 0.;
     float delta_c;
@@ -92,6 +145,7 @@ namespace HGCalRecAlgos{
     const dim3 blockSize(1024,1,1);
     const dim3 gridSize(1,1,1);
     kernel_compute_density <<<gridSize,blockSize>>>(dInputHist, dInputRecHits, delta_c, theHits.size());
+    kernel_compute_distanceToHigher <<<gridSize,blockSize>>>(dInputHist, dInputRecHits, delta_c, theHits.size());
     
     // Copy result back!/
     cudaMemcpy(hInputRecHits, dInputRecHits, sizeof(RecHitGPU)*theHits.size(), cudaMemcpyDeviceToHost);
@@ -100,7 +154,6 @@ namespace HGCalRecAlgos{
     cudaFree(dInputHist);
     cudaFree(dInputRecHits);
     
-    // std::cout << "Inside GPU " << std::endl;
     for(unsigned int j = 0; j< theHits.size(); j++) {
       if (maxdensity < theHits[j].rho) {
         maxdensity = theHits[j].rho;
@@ -109,7 +162,10 @@ namespace HGCalRecAlgos{
 
     return maxdensity;
 
-  }//calcualteLocalDensity
+  }
+
+
+
 
 }//namespace
 

@@ -147,7 +147,7 @@ void HGCalImagingAlgo::makeClusters() {
       std::cout << std::endl;
 
 
-      double maxdensity_BinGPU = HGCalRecAlgos::calculateLocalDensity_BinGPU(histosGPU[i], recHitsGPU[i], actualLayer, vecDeltas_);
+      double maxdensity_BinGPU = HGCalRecAlgos::calculateLocalDensity_DistanceToHigher_BinGPU(histosGPU[i], recHitsGPU[i], actualLayer, vecDeltas_);
       std::cout << "BinGPU layer = " << actualLayer << std::endl;
       for (unsigned int j=0; j<recHitsGPU[i].size(); j++){
         std::cout << recHitsGPU[i][j].rho << " " ;
@@ -161,9 +161,14 @@ void HGCalImagingAlgo::makeClusters() {
       std::cout << "maxdensity_BinGPU = " << maxdensity_BinGPU << std::endl;
 
       // calculate distance to nearest point with higher density storing
-      // distance (delta) and point's index      
+      // distance (delta) and point's index
       calculateDistanceToHigher(points_[i]);
-      calculateDistanceToHigher_BinCPU(recHitsGPU[i]);
+      for (unsigned int j=0; j<recHitsGPU[i].size(); j++){
+        std::cout << "GPU RecHit N: " << j << " | Delta: " << recHitsGPU[i][j].delta << " | NearestHigher: " << recHitsGPU[i][j].nearestHigher << " | Density: " << recHitsGPU[i][j].rho << std::endl;
+        recHitsGPU[i][j].delta = 0;
+        recHitsGPU[i][j].nearestHigher = 0;
+      }
+      calculateDistanceToHigher_BinCPU(histosGPU[i], recHitsGPU[i], actualLayer);
       // std::vector<size_t> rs = sorted_indices(points_[i]);
       // std::vector<size_t> rsGPU = sorted_indices(recHitsGPU[i]);
       // for(size_t zz = 0; zz < 10; ++zz){
@@ -796,73 +801,76 @@ double HGCalImagingAlgo::calculateLocalDensity_BinCPU(Histo2D hist, LayerRecHits
           }
         }
       }
-    }
-    
-    //std::cout << "fnal rho is " << hits[i].rho << std::endl;
-    //std::cout << std::endl;
+    }    
   }
 
   return maxdensity;
 }
 
-double HGCalImagingAlgo::calculateDistanceToHigher_BinCPU(std::vector<RecHitGPU> &nd) const {
-	
-  // sort vector of RecHits by decreasing local density
-  std::vector<size_t> rs = sorted_indices(nd);
+double HGCalImagingAlgo::calculateDistanceToHigher_BinCPU(Histo2D hist, LayerRecHitsGPU &hits, const unsigned int layer) const {
+	float maxDelta = 2000.0;
 
-  // for(size_t k=0; k<rs.size(); ++k)
-  //    std::cout << nd[rs[k]].rho << " ";
-  // std::cout << std::endl;
+  float delta_c; 
+  if (layer <= lastLayerEE)
+    delta_c = vecDeltas_[0];
+  else if (layer <= lastLayerFH)
+    delta_c = vecDeltas_[1];
+  else 
+    delta_c = vecDeltas_[2];
+  
 
-  double maxdensity = 0.0;
-  int nearestHigher = -1;
 
-  if (!rs.empty())
-    maxdensity = nd[rs[0]].rho;
-  else
-    return maxdensity; // there are no hits
+  for(unsigned int i = 0; i < hits.size(); i++) {
+    // initialize delta and nearest higer for i
+    float i_delta = maxDelta;
+    int i_nearestHigher = -1;
 
-  double dist2 = 0.;
-  // start by setting delta for the highest density hit to
-  // the most distant hit - this is a convention
+    // by default, ith hit takes the initialized value
+    hits[i].delta = i_delta;
+    hits[i].nearestHigher = i_nearestHigher;
 
-  for (auto &j : nd) {
-    double tmp = distance2GPU(nd[rs[0]], j);
-    if (tmp > dist2)
-      dist2 = tmp;
-  }
+    // get search box for ith hit
+    std::array<int,4> search_box = hist.searchBox(hits[i].x - delta_c, hits[i].x + delta_c, hits[i].y - delta_c, hits[i].y + delta_c);
+    
+    // loop over all bins in the search box
+    for(int xBin = search_box[0]; xBin < search_box[1]+1; ++xBin) {
+      for(int yBin = search_box[2]; yBin < search_box[3]+1; ++yBin) {
+        
+        // get the id of this bin
+        int binId = hist.getBinIdx_byBins(xBin,yBin);
+        // get the size of this bin
+        size_t binSize = hist.data_[binId].size();
+        // loop over all hits in this bin
+        for (unsigned int j = 0; j < binSize; j++) {
+          int idTwo = hist.data_[binId][j];
 
-  nd[rs[0]].delta = std::sqrt(dist2);
-  nd[rs[0]].nearestHigher = nearestHigher;
+          float dist = distanceGPU(hits[i],hits[idTwo]);
+          bool foundHigher = hits[idTwo].rho > hits[i].rho;
 
-  // now we save the largest distance as a starting point
-  const double max_dist2 = dist2;
-  const unsigned int nd_size = nd.size();
+          if(dist < i_delta  &&  foundHigher) {
+            // update i_delta
+            i_delta = dist;
 
-  for (unsigned int oi = 1; oi < nd_size; ++oi) { // start from second-highest density
-    dist2 = max_dist2;
-    unsigned int i = rs[oi];
-    // we only need to check up to oi since hits
-    // are ordered by decreasing density
-    // and all points coming BEFORE oi are guaranteed to have higher rho
-    // and the ones AFTER to have lower rho
-    for (unsigned int oj = 0; oj < oi; ++oj) {
-      unsigned int j = rs[oj];
-      double tmp = distance2GPU(nd[i], nd[j]);
-      if (tmp <= dist2) { // this "<=" instead of "<" addresses the (rare) case
-        // when there are only two hits
-        dist2 = tmp;
-        nearestHigher = j;
+            // update i_nearestHigher
+            i_nearestHigher = idTwo;
+          }
+        }
       }
     }
-    nd[i].delta = std::sqrt(dist2);
-    nd[i].nearestHigher = nearestHigher; // this uses the original unsorted hitlist
-  }
-	
-  for(unsigned i=0; i<nd_size; ++i)
-    std::cout << "RecHit N: " << i << " | Delta: " << nd[i].delta << " | NearestHigher: " << nd[i].nearestHigher << " | Density: " << nd[i].rho << std::endl;
 
-	return maxdensity;
+    // if i is not a seed or noise
+    if (i_delta < delta_c){
+      // pass i_delta and i_nearestHigher to ith hit
+      hits[i].delta = i_delta;
+      hits[i].nearestHigher = i_nearestHigher;
+    }
+
+  }
+
+  for(unsigned i=0; i<hits.size(); ++i)
+    std::cout << "RecHit N: " << i << " | Delta: " << hits[i].delta << " | NearestHigher: " << hits[i].nearestHigher << " | Density: " << hits[i].rho << std::endl;
+
+  return maxDelta;
 }
 
 
