@@ -133,57 +133,38 @@ void HGCalImagingAlgo::makeClusters() {
               ? (i - (maxlayer + 1))
               : i; // maps back from index used for KD trees to actual layer
       std::cout << std::endl;
+
       // also stores rho for each point
-      std::cout << "CPU layer = " << actualLayer << std::endl;
+      std::cout << "layer = " << actualLayer << std::endl;
+
+      // kdTree CPU
       double maxdensity = calculateLocalDensity( points_[i], hit_kdtree, actualLayer);
-      double maxdensity_BinCPU = calculateLocalDensity_BinCPU(histosGPU[i], recHitsGPU[i], actualLayer);
-      std::cout << std::endl;
-
-      std::cout << "BinCPU layer = " << actualLayer << std::endl;
-      for (unsigned int j=0; j<recHitsGPU[i].size(); j++){
-        std::cout << recHitsGPU[i][j].rho << " " ;
-        recHitsGPU[i][j].rho =0;
-      }
-      std::cout << std::endl;
-
-
-      double maxdensity_BinGPU = HGCalRecAlgos::calculateLocalDensity_DistanceToHigher_BinGPU(histosGPU[i], recHitsGPU[i], actualLayer, vecDeltas_);
-      std::cout << "BinGPU layer = " << actualLayer << std::endl;
-      for (unsigned int j=0; j<recHitsGPU[i].size(); j++){
-        std::cout << recHitsGPU[i][j].rho << " " ;
-      }
-      std::cout << std::endl;
-
-      
-      std::cout << std::endl;
-      std::cout << "maxdensity_kdtree = " << maxdensity << std::endl;
-      std::cout << "maxdensity_BinCPU = " << maxdensity_BinCPU << std::endl;
-      std::cout << "maxdensity_BinGPU = " << maxdensity_BinGPU << std::endl;
-
-      // calculate distance to nearest point with higher density storing
-      // distance (delta) and point's index
       calculateDistanceToHigher(points_[i]);
-      for (unsigned int j=0; j<recHitsGPU[i].size(); j++){
-        std::cout << "GPU RecHit N: " << j << " | Delta: " << recHitsGPU[i][j].delta << " | NearestHigher: " << recHitsGPU[i][j].nearestHigher << " | Density: " << recHitsGPU[i][j].rho << std::endl;
-        recHitsGPU[i][j].delta = 0;
-        recHitsGPU[i][j].nearestHigher = 0;
-      }
-      calculateDistanceToHigher_BinCPU(histosGPU[i], recHitsGPU[i], actualLayer);
-      // std::vector<size_t> rs = sorted_indices(points_[i]);
-      // std::vector<size_t> rsGPU = sorted_indices(recHitsGPU[i]);
-      // for(size_t zz = 0; zz < 10; ++zz){
-      //   std::cout << "\npoint \n" <<
-      //   points_[i][rs[zz]].data.delta << ", " <<
-      //   points_[i][rs[zz]].data.nearestHigher << std::endl;
+      findAndAssignClusters(points_[i], hit_kdtree, maxdensity, bounds, actualLayer, layerClustersPerLayer_[i]);
 
-      //   std::cout << "recHit \n" <<
-      //   recHitsGPU[i][rsGPU[zz]].delta << ", " <<
-      //   recHitsGPU[i][rsGPU[zz]].nearestHigher << std::endl;
+      // // Bin CPU
+      // double maxdensity_BinCPU = calculateLocalDensity_BinCPU(histosGPU[i], recHitsGPU[i], actualLayer);
+      // calculateDistanceToHigher_BinCPU(histosGPU[i], recHitsGPU[i], actualLayer);
+      // findAndAssignClusters_BinCPU(recHitsGPU[i], actualLayer);
+
+      // for (unsigned int j=0; j<recHitsGPU[i].size(); j++){
+      //   recHitsGPU[i][j].delta = 0;
+      //   recHitsGPU[i][j].nearestHigher = 0;
+      //   recHitsGPU[i][j].clusterIndex = 0 ;
+      //   recHitsGPU[i][j].followers.reset();
       // }
 
-      findAndAssignClusters(points_[i], hit_kdtree, maxdensity, bounds,
-                            actualLayer, layerClustersPerLayer_[i]);
-      findAndAssignClusters_BinCPU(recHitsGPU[i], actualLayer);
+      // Bin GPU
+      double maxdensity_BinGPU = HGCalRecAlgos::clue_BinGPU(histosGPU[i], recHitsGPU[i], actualLayer, vecDeltas_, kappa_, outlierDeltaFactor_);
+
+      std::cout << "------ Bin GPU ------" << std::endl;
+      for (unsigned int j=0; j<recHitsGPU[i].size(); j++){
+        std::cout << "GPU RecHit N: " << j << " | clusterIndex: " << recHitsGPU[i][j].clusterIndex << " | Delta: " << recHitsGPU[i][j].delta << " | NearestHigher: " << recHitsGPU[i][j].nearestHigher << " | Density: " << recHitsGPU[i][j].rho << std::endl;
+      }
+      
+
+
+
     });
   });
 
@@ -352,8 +333,7 @@ double HGCalImagingAlgo::calculateLocalDensity(std::vector<KDNode> &nd,
   
 
   // for each node calculate local density rho and store it
-  std::cout << std::endl;
-  std::cout << "--- rho of KDTreeCPU ---" << std::endl;
+
   for (unsigned int i = 0; i < nd.size(); ++i) {
     // speec up search by looking within +/- delta_c window only
     KDTreeBox search_box(nd[i].dims[0] - delta_c, nd[i].dims[0] + delta_c,
@@ -373,7 +353,6 @@ double HGCalImagingAlgo::calculateLocalDensity(std::vector<KDNode> &nd,
         maxdensity = std::max(maxdensity, nd[i].data.rho);
       }
     } // end loop found
-    std::cout << nd[i].data.rho << " ";
   }   // end loop nodes
 
   return maxdensity;
@@ -427,10 +406,6 @@ double HGCalImagingAlgo::calculateDistanceToHigher(std::vector<KDNode> &nd) cons
     nd[i].data.delta = std::sqrt(dist2);
     nd[i].data.nearestHigher = nearestHigher; // this uses the original unsorted hitlist
   }
-
-  for(unsigned i=0; i<nd_size; ++i)
-	  std::cout << "Hexel N: " << i << " | Delta: " << nd[i].data.delta << " | NearestHigher: " << nd[i].data.nearestHigher << " | Density: " << nd[i].data.rho << std::endl;
-	
 
   return maxdensity;
 }
@@ -870,15 +845,11 @@ double HGCalImagingAlgo::calculateDistanceToHigher_BinCPU(Histo2D hist, LayerRec
       hits[i].nearestHigher = i_nearestHigher;
       
       // register i as follower of i_nearestHigher
-      hits[i_nearestHigher].followers[hits[i_nearestHigher].nFollowers] = i;
-      hits[i_nearestHigher].nFollowers++;
+      hits[i_nearestHigher].followers.push_back_unsafe(i);
     }
     // else i is a follower of anyone
     // i is a outlier
   }
-
-  for(unsigned i=0; i<hits.size(); ++i)
-    std::cout << "RecHit N: " << i << " | Delta: " << hits[i].delta << " | NearestHigher: " << hits[i].nearestHigher << " | Density: " << hits[i].rho << std::endl;
 
   return maxDelta;
 }
@@ -927,11 +898,11 @@ int HGCalImagingAlgo::findAndAssignClusters_BinCPU( LayerRecHitsGPU &hits, const
 
   // hits in buffer, need to pass clusterIndex to their followers
   while (!buffer.empty()) {
-    auto thisHit = hits[buffer.front()];
+    RecHitGPU thisHit = hits[buffer.front()];
     buffer.pop();
-    if (thisHit.nFollowers > 0){
+    if (thisHit.followers.size() > 0){
       // loop over followers
-      for( int j=0; j < thisHit.nFollowers;j++ ){
+      for( int j=0; j < thisHit.followers.size(); j++ ){
         // pass id to follower
         hits[thisHit.followers[j]].clusterIndex = thisHit.clusterIndex;
         // push follower to buffer

@@ -21,8 +21,7 @@ struct RecHitGPU {
         double delta;
 
         int nearestHigher;
-        int nFollowers=0;
-        int followers[20];
+        GPU::VecArray<int,20> followers;
 
         int clusterIndex;
 
@@ -44,8 +43,8 @@ namespace BinnerGPU {
     // 1.4/0.05 = 28
     // 20 (as heuristic)
 
-const int X_BINS=32;
-const int Y_BINS=32;
+const int X_BINS=50;
+const int Y_BINS=50;
 const int MAX_DEPTH=20;
 
 typedef histogram2D<int, X_BINS, Y_BINS, MAX_DEPTH> Histo2D;

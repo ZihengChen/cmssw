@@ -11,6 +11,7 @@ namespace HGCalRecAlgos{
 
   static const unsigned int lastLayerEE = 28;
   static const unsigned int lastLayerFH = 40;
+  static const unsigned int maxNSeeds = 200; // FIXME
 
   __device__ double distance2GPU(const RecHitGPU pt1, const RecHitGPU pt2) {
     //distance squared
@@ -58,7 +59,7 @@ namespace HGCalRecAlgos{
   } //kernel
 
 
-  __global__ void kernel_compute_distanceToHigher(Histo2D* theHist, RecHitGPU* theHits, float delta_c, int theHitsSize) {
+  __global__ void kernel_compute_distanceToHigher(Histo2D* theHist, RecHitGPU* theHits, float delta_c, int theHitsSize, float outlierDeltaFactor_) {
 
     size_t idOne = threadIdx.x;
     // int temp = theHist->getBinIdx_byBins(1,1);
@@ -73,10 +74,10 @@ namespace HGCalRecAlgos{
       theHits[idOne].nearestHigher = i_nearestHigher;
 
 
-      int xBinMin = theHist->computeXBinIndex(std::max(float(theHits[idOne].x - delta_c), theHist->limits_[0]));
-      int xBinMax = theHist->computeXBinIndex(std::min(float(theHits[idOne].x + delta_c), theHist->limits_[1]));
-      int yBinMin = theHist->computeYBinIndex(std::max(float(theHits[idOne].y - delta_c), theHist->limits_[2]));
-      int yBinMax = theHist->computeYBinIndex(std::min(float(theHits[idOne].y + delta_c), theHist->limits_[3]));
+      int xBinMin = theHist->computeXBinIndex(std::max(float(theHits[idOne].x - outlierDeltaFactor_*delta_c), theHist->limits_[0]));
+      int xBinMax = theHist->computeXBinIndex(std::min(float(theHits[idOne].x + outlierDeltaFactor_*delta_c), theHist->limits_[1]));
+      int yBinMin = theHist->computeYBinIndex(std::max(float(theHits[idOne].y - outlierDeltaFactor_*delta_c), theHist->limits_[2]));
+      int yBinMax = theHist->computeYBinIndex(std::min(float(theHits[idOne].y + outlierDeltaFactor_*delta_c), theHist->limits_[3]));
 
       // loop over all bins in the search box
       for(int xBin = xBinMin; xBin < xBinMax+1; ++xBin) {
@@ -103,20 +104,89 @@ namespace HGCalRecAlgos{
       }
 
       // if i is not a seed or noise
-      if (i_delta < delta_c){
+      if (i_delta < outlierDeltaFactor_*delta_c){
         // pass i_delta and i_nearestHigher to ith hit
         theHits[idOne].delta = i_delta;
         theHits[idOne].nearestHigher = i_nearestHigher;
+
+        // // register i as follower of i_nearestHigher
+        theHits[i_nearestHigher].followers.push_back(idOne);
       }
 
     }
   } //kernel
 
 
-  double calculateLocalDensity_DistanceToHigher_BinGPU( const BinnerGPU::Histo2D& theHist, LayerRecHitsGPU& theHits, const unsigned int layer, std::vector<double> vecDeltas_) {
+  __global__ void kernel_find_clusters(GPU::VecArray<int,maxNSeeds>* seeds, RecHitGPU* theHits, float delta_c, int theHitsSize, float kappa_, float outlierDeltaFactor_) {
+
+    size_t idOne = threadIdx.x;
+
+    if (idOne < theHitsSize){
+
+      float rho_c = kappa_ * theHits[idOne].sigmaNoise;
+
+      // decide a seed
+      if (theHits[idOne].delta > delta_c && theHits[idOne].rho >= rho_c) {
+        // push hits[idOne] into seeds
+        seeds->push_back(idOne);
+      } 
+
+      // decide a outlier
+      if (theHits[idOne].delta > outlierDeltaFactor_*delta_c && theHits[idOne].rho < rho_c) {
+        // hits[idOne] is a outlier
+        theHits[idOne].clusterIndex = -1;    
+      }
+    }
+  } //kernel
+
+
+  __global__ void kernel_assign_clusters(GPU::VecArray<int,maxNSeeds>* seeds, RecHitGPU* theHits) {
+
+    unsigned int idOne = threadIdx.x;
+    unsigned int nClusters = seeds->size();
+
+    if (idOne < nClusters){
+      // buffer of index of hits to process
+      GPU::VecArray<int,maxNSeeds> buffer;
+
+      // asgine cluster
+      theHits[seeds->data()[idOne]].clusterIndex = idOne;
+      buffer.push_back(seeds->data()[idOne]);
+
+      // starting from hit 
+      while(!buffer.empty()){
+
+        // last element of buffer
+        int endOfBuffer = buffer[buffer.size()-1];
+        RecHitGPU thisHit = theHits[ endOfBuffer ];
+
+        // pop last element of buffer
+        buffer.pop_back();
+        
+        if (thisHit.followers.size() > 0){
+          // loop over followers
+          for( int j=0; j < thisHit.followers.size();j++ ){
+            // pass id to follower
+            theHits[thisHit.followers[j]].clusterIndex = thisHit.clusterIndex;
+            // push follower to buffer
+            buffer.push_back(thisHit.followers[j]);
+          }
+        }
+      }
+
+    }
+  } //kernel
+
+
+
+
+
+  double clue_BinGPU( const BinnerGPU::Histo2D& theHist, LayerRecHitsGPU& theHits, const unsigned int layer, std::vector<double> vecDeltas_, float kappa_, float outlierDeltaFactor_) {
 
     double maxdensity = 0.;
     float delta_c;
+    
+
     // maximum search distance (critical distance) for local density calculation
     
     if (layer <= lastLayerEE)
@@ -129,7 +199,9 @@ namespace HGCalRecAlgos{
     RecHitGPU *hInputRecHits;
     hInputRecHits = theHits.data();
 
-
+    
+    
+    GPU::VecArray<int,maxNSeeds> *dSeeds;
     Histo2D *dInputHist;
     RecHitGPU *dInputRecHits;  // make input hits for GPU
 
@@ -138,17 +210,22 @@ namespace HGCalRecAlgos{
 
     cudaMalloc(&dInputHist, sizeof(Histo2D));
     cudaMalloc(&dInputRecHits, sizeof(RecHitGPU)*theHits.size());
+    cudaMalloc(&dSeeds, sizeof(GPU::VecArray<int,maxNSeeds>));
 
     cudaMemcpy(dInputHist, &theHist, sizeof(Histo2D), cudaMemcpyHostToDevice);
     cudaMemcpy(dInputRecHits, hInputRecHits, sizeof(RecHitGPU)*theHits.size(), cudaMemcpyHostToDevice);
+    
     // Call the kernel
     const dim3 blockSize(1024,1,1);
     const dim3 gridSize(1,1,1);
     kernel_compute_density <<<gridSize,blockSize>>>(dInputHist, dInputRecHits, delta_c, theHits.size());
-    kernel_compute_distanceToHigher <<<gridSize,blockSize>>>(dInputHist, dInputRecHits, delta_c, theHits.size());
-    
+    kernel_compute_distanceToHigher <<<gridSize,blockSize>>>(dInputHist, dInputRecHits, delta_c, theHits.size(), outlierDeltaFactor_);
+    kernel_find_clusters <<<gridSize,blockSize>>>(dSeeds, dInputRecHits, delta_c, theHits.size(), kappa_, outlierDeltaFactor_);
+    kernel_assign_clusters <<<gridSize,blockSize>>>(dSeeds, dInputRecHits);
+
     // Copy result back!/
     cudaMemcpy(hInputRecHits, dInputRecHits, sizeof(RecHitGPU)*theHits.size(), cudaMemcpyDeviceToHost);
+
 
     // Free all the memory
     cudaFree(dInputHist);

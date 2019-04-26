@@ -342,7 +342,7 @@ HgcRecHitsGPU recHitsGPU;
 };
 
 namespace HGCalRecAlgos {
-        double calculateLocalDensity_DistanceToHigher_BinGPU(const BinnerGPU::Histo2D &theHist, LayerRecHitsGPU &theHits, const unsigned int layer, std::vector<double> vecDeltas_);
+        double clue_BinGPU(const BinnerGPU::Histo2D &theHist, LayerRecHitsGPU &theHits, const unsigned int layer, std::vector<double> vecDeltas_, float, float);
         // double calculateDistanceToHigher_BinGPU()
         // void launch_kenrel_compute_distance_ToHigher(
         //         std::vector<RecHitGPU>& nd,
