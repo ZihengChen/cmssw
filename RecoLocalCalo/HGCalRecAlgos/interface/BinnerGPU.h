@@ -21,9 +21,8 @@ struct RecHitGPU {
         double delta;
 
         int nearestHigher;
-
-        bool isBorder;
-        bool isHalo;
+        int nFollowers=0;
+        int followers[20];
 
         int clusterIndex;
 

@@ -195,6 +195,9 @@ double kappa_;
 // The hit energy cutoff
 double ecut_;
 
+// for cut out
+double outlierDeltaFactor_ = 2;
+
 // for energy sharing
 double sigma2_;   // transverse shower size
 
@@ -320,9 +323,10 @@ double calculateLocalDensity_BinCPU(Histo2D, LayerRecHitsGPU &, const unsigned i
 
 double calculateDistanceToHigher(std::vector<KDNode> &nd) const;
 double calculateDistanceToHigher_BinCPU(Histo2D, LayerRecHitsGPU &, const unsigned int) const;
-// double calculateDistanceToHigher_BinCPU(std::vector<RecHitGPU> &nd) const;
 
 int findAndAssignClusters(std::vector<KDNode> &, KDTree &, double, KDTreeBox &, const unsigned int, std::vector<std::vector<KDNode> >&) const;
+int findAndAssignClusters_BinCPU(LayerRecHitsGPU &, const unsigned int) const;
+
 math::XYZPoint calculatePosition(std::vector<KDNode> &) const;
 
 // attempt to find subclusters within a given set of hexels
