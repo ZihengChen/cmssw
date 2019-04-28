@@ -17,12 +17,14 @@
 #include "RecoLocalCalo/HGCalRecAlgos/interface/GPUHist2D.h"
 
 #include <chrono>
+#include <stdlib.h>     /* malloc, free, rand */
 
 
 void HGCalImagingAlgo::populate(const HGCRecHitCollection &hits) {
   // loop over all hits and create the Hexel structure, skip energies below ecut
 
   if (dependSensor_) {
+    std::cout << "dependSensor_" <<std::endl;
     // for each layer and wafer calculate the thresholds (sigmaNoise and energy)
     // once
     computeThreshold();
@@ -78,6 +80,7 @@ void HGCalImagingAlgo::populate(const HGCRecHitCollection &hits) {
     hit.phi = position.phi();
     hit.weight = hgrh.energy();
     hit.rho = 0.0;
+    hit.sigmaNoise = sigmaNoise;
  
     recHitsGPU[layer].emplace_back(hit);;
     
@@ -142,28 +145,26 @@ void HGCalImagingAlgo::makeClusters() {
       calculateDistanceToHigher(points_[i]);
       findAndAssignClusters(points_[i], hit_kdtree, maxdensity, bounds, actualLayer, layerClustersPerLayer_[i]);
 
-      // // Bin CPU
-      // double maxdensity_BinCPU = calculateLocalDensity_BinCPU(histosGPU[i], recHitsGPU[i], actualLayer);
-      // calculateDistanceToHigher_BinCPU(histosGPU[i], recHitsGPU[i], actualLayer);
-      // findAndAssignClusters_BinCPU(recHitsGPU[i], actualLayer);
+      // Bin CPU
+      calculateLocalDensity_BinCPU(histosGPU[i], recHitsGPU[i], actualLayer);
+      calculateDistanceToHigher_BinCPU(histosGPU[i], recHitsGPU[i], actualLayer);
+      findAndAssignClusters_BinCPU(recHitsGPU[i], actualLayer);
 
-      // for (unsigned int j=0; j<recHitsGPU[i].size(); j++){
-      //   recHitsGPU[i][j].delta = 0;
-      //   recHitsGPU[i][j].nearestHigher = 0;
-      //   recHitsGPU[i][j].clusterIndex = 0 ;
-      //   recHitsGPU[i][j].followers.reset();
-      // }
+      for (unsigned int j=0; j<recHitsGPU[i].size(); j++){
+        std::cout << "CPU RecHit N: " << j << " |  nFollowers " << recHitsGPU[i][j].followers.size() << " | clusterIndex: " << recHitsGPU[i][j].clusterIndex << " | Delta: " << recHitsGPU[i][j].delta << " | NearestHigher: " << recHitsGPU[i][j].nearestHigher << " | Density: " << recHitsGPU[i][j].rho << " | rho_c: " << kappa_*recHitsGPU[i][j].sigmaNoise << std::endl;
+        recHitsGPU[i][j].rho = 0;
+        recHitsGPU[i][j].delta = 0;
+        recHitsGPU[i][j].nearestHigher = 0;
+        recHitsGPU[i][j].clusterIndex = 0 ;
+        recHitsGPU[i][j].followers.reset();
+      }
 
       // Bin GPU
-      double maxdensity_BinGPU = HGCalRecAlgos::clue_BinGPU(histosGPU[i], recHitsGPU[i], actualLayer, vecDeltas_, kappa_, outlierDeltaFactor_);
-
-      std::cout << "------ Bin GPU ------" << std::endl;
+      HGCalRecAlgos::clue_BinGPU(histosGPU[i], recHitsGPU[i], actualLayer, vecDeltas_, kappa_, outlierDeltaFactor_);
       for (unsigned int j=0; j<recHitsGPU[i].size(); j++){
-        std::cout << "GPU RecHit N: " << j << " | clusterIndex: " << recHitsGPU[i][j].clusterIndex << " | Delta: " << recHitsGPU[i][j].delta << " | NearestHigher: " << recHitsGPU[i][j].nearestHigher << " | Density: " << recHitsGPU[i][j].rho << std::endl;
+        std::cout << "GPU RecHit N: " << j << " |  nFollowers " << recHitsGPU[i][j].followers.size() << " | clusterIndex: " << recHitsGPU[i][j].clusterIndex << " | Delta: " << recHitsGPU[i][j].delta << " | NearestHigher: " << recHitsGPU[i][j].nearestHigher << " | Density: " << recHitsGPU[i][j].rho << " | rho_c: " << kappa_*recHitsGPU[i][j].sigmaNoise << std::endl;
       }
       
-
-
 
     });
   });
@@ -806,11 +807,8 @@ double HGCalImagingAlgo::calculateDistanceToHigher_BinCPU(Histo2D hist, LayerRec
     float i_delta = maxDelta;
     int i_nearestHigher = -1;
 
-    // by default, ith hit takes the initialized value
-    hits[i].delta = i_delta;
-    hits[i].nearestHigher = i_nearestHigher;
-
     // get search box for ith hit
+    // garrantee to cover "outlierDeltaFactor_*delta_c"
     std::array<int,4> search_box = hist.searchBox(hits[i].x - outlierDeltaFactor_*delta_c, hits[i].x + outlierDeltaFactor_*delta_c, hits[i].y - outlierDeltaFactor_*delta_c, hits[i].y + outlierDeltaFactor_*delta_c);
     
     // loop over all bins in the search box
@@ -818,9 +816,10 @@ double HGCalImagingAlgo::calculateDistanceToHigher_BinCPU(Histo2D hist, LayerRec
       for(int yBin = search_box[2]; yBin < search_box[3]+1; ++yBin) {
         
         // get the id of this bin
-        int binId = hist.getBinIdx_byBins(xBin,yBin);
+        size_t binId = hist.getBinIdx_byBins(xBin,yBin);
         // get the size of this bin
         size_t binSize = hist.data_[binId].size();
+
         // loop over all hits in this bin
         for (unsigned int j = 0; j < binSize; j++) {
           int idTwo = hist.data_[binId][j];
@@ -831,7 +830,6 @@ double HGCalImagingAlgo::calculateDistanceToHigher_BinCPU(Histo2D hist, LayerRec
           if(dist < i_delta  &&  foundHigher) {
             // update i_delta
             i_delta = dist;
-
             // update i_nearestHigher
             i_nearestHigher = idTwo;
           }
@@ -839,16 +837,18 @@ double HGCalImagingAlgo::calculateDistanceToHigher_BinCPU(Histo2D hist, LayerRec
       }
     }
 
-    if (i_delta < outlierDeltaFactor_*delta_c){
+    bool foundNearestHigherInSearchBox = (i_delta != maxDelta);
+    //if (i_delta <= outlierDeltaFactor_*delta_c){
+    if (foundNearestHigherInSearchBox){
       // pass i_delta and i_nearestHigher to ith hit
       hits[i].delta = i_delta;
       hits[i].nearestHigher = i_nearestHigher;
-      
-      // register i as follower of i_nearestHigher
-      hits[i_nearestHigher].followers.push_back_unsafe(i);
+    } else {
+      // otherwise delta is garanteed to be larger outlierDeltaFactor_*delta_c
+      // we can safely maximize delta to be maxDelta
+      hits[i].delta = maxDelta;
+      hits[i].nearestHigher = -1;
     }
-    // else i is a follower of anyone
-    // i is a outlier
   }
 
   return maxDelta;
@@ -862,10 +862,17 @@ int HGCalImagingAlgo::findAndAssignClusters_BinCPU( LayerRecHitsGPU &hits, const
   // by the number  of clusters found. This is always equal to the number of
   // cluster centers...
 
+  //const int maxNFollower = 20;
   unsigned int nClustersOnLayer = 0;
 
-  // buffer for index of hits with clusterIndex but have not pass clusterIndex to their followers
+  // buffer for index of hits, 
+  // which has clusterIndex 
+  // but have not pass clusterIndex to their followers
   std::queue<int> buffer; 
+
+  // GPU::VecArray<int,maxNFollower> *followers;
+  // followers = (GPU::VecArray<int,maxNFollower>*) malloc( hits.size() * sizeof(GPU::VecArray<int,maxNFollower>) );
+
 
   float delta_c; // critical distance
   if (layer <= lastLayerEE)
@@ -875,46 +882,52 @@ int HGCalImagingAlgo::findAndAssignClusters_BinCPU( LayerRecHitsGPU &hits, const
   else
     delta_c = vecDeltas_[2];
 
-  // find cluster seeds and outlier
-  std::cout << "kappa_ " << kappa_ << std::endl;
+  // find cluster seeds and outlier  
   for(unsigned int i = 0; i < hits.size(); i++) {
-    float rho_c = kappa_ * hits[i].sigmaNoise;
 
-    // decide a seed
-    if (hits[i].delta > delta_c && hits[i].rho >= rho_c) {
-      // hits[i] is a seed 
+    float rho_c = kappa_ * hits[i].sigmaNoise;
+    
+    // initialize clusterIndex
+    hits[i].clusterIndex = -1;
+
+    bool isSeed = (hits[i].delta > delta_c) && (hits[i].rho >= rho_c);
+    bool isOutlier = (hits[i].delta > outlierDeltaFactor_*delta_c) && (hits[i].rho < rho_c);
+
+    if (isSeed) {
+      // hits[i] is a seed
       hits[i].clusterIndex = nClustersOnLayer;
       nClustersOnLayer++;
       // add hits[i] into buffer
       buffer.push(i);
+    
+    } else if (!isOutlier) {
+      hits[hits[i].nearestHigher].followers.push_back_unsafe(i);   
+      //followers[ hits[i].nearestHigher ].push_back_unsafe(i); 
     } 
-
-    // decide a outlier
-    if (hits[i].delta > outlierDeltaFactor_*delta_c && hits[i].rho < rho_c) {
-      // hits[i] is a outlier
-      hits[i].clusterIndex = -1;    
-    }
+    
   }
 
   // hits in buffer, need to pass clusterIndex to their followers
   while (!buffer.empty()) {
-    RecHitGPU thisHit = hits[buffer.front()];
+    int frontOfBuffer = buffer.front();
+    RecHitGPU thisHit = hits[frontOfBuffer];
+
+    // auto thisHit_followers = hits[frontOfBuffer].followers;
+    //GPU::VecArray<int,maxNFollower> thisHit_followers = followers[frontOfBuffer];
+
     buffer.pop();
-    if (thisHit.followers.size() > 0){
-      // loop over followers
-      for( int j=0; j < thisHit.followers.size(); j++ ){
-        // pass id to follower
-        hits[thisHit.followers[j]].clusterIndex = thisHit.clusterIndex;
-        // push follower to buffer
-        buffer.push(thisHit.followers[j]);
-      }
+
+
+    // loop over followers
+    for( int j=0; j < thisHit.followers.size(); j++ ){
+      // pass id to a follower
+      hits[thisHit.followers[j]].clusterIndex = thisHit.clusterIndex;
+      // push this follower to buffer
+      buffer.push(thisHit.followers[j]);
     }
+    
   }
-
-  for(unsigned i=0; i<hits.size(); ++i)
-    std::cout << "RecHit N: " << i << " | clusterIndex: " << hits[i].clusterIndex << " | Delta: " << hits[i].delta << " | NearestHigher: " << hits[i].nearestHigher << " | Density: " << hits[i].rho << std::endl;
-
-
+  
   return nClustersOnLayer;
 }
 

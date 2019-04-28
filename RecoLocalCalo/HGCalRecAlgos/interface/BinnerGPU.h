@@ -21,9 +21,10 @@ struct RecHitGPU {
         double delta;
 
         int nearestHigher;
-        GPU::VecArray<int,20> followers;
-
+        
         int clusterIndex;
+
+        GPU::VecArray<int,20> followers;
 
         float sigmaNoise;
         float thickness;   
