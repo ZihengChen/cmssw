@@ -1,6 +1,4 @@
-#include "RecoLocalCalo/HGCalRecAlgos/interface/HGCalImagingAlgo.h"
-#include "RecoLocalCalo/HGCalRecAlgos/interface/HGCalLayerTiles.h"
-
+#include "RecoLocalCalo/HGCalRecProducers/interface/HGCalImagingAlgo.h"
 // Geometry
 #include "DataFormats/HcalDetId/interface/HcalSubdetector.h"
 #include "Geometry/CaloGeometry/interface/CaloCellGeometry.h"
@@ -12,6 +10,7 @@
 #include "DataFormats/CaloRecHit/interface/CaloID.h"
 #include "tbb/task_arena.h"
 #include "tbb/tbb.h"
+
 
 using namespace hgcal_clustering;
 
