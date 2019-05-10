@@ -14,7 +14,7 @@
 #include "DataFormats/EgammaReco/interface/BasicCluster.h"
 #include "DataFormats/Math/interface/Point3D.h"
 
-#include "RecoLocalCalo/HGCalRecAlgos/interface/HGCalLayerTiles.h"
+#include "RecoLocalCalo/HGCalRecProducers/interface/HGCalLayerTiles.h"
 
 
 #include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
@@ -45,16 +45,14 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
      nonAgedNoises_(ps.getParameter<edm::ParameterSet>("noises").getParameter<std::vector<double> >("values")),
      noiseMip_(ps.getParameter<edm::ParameterSet>("noiseMip").getParameter<double>("noise_MIP")),
      initialized_(false),
-     cellsCEE_(2*(maxlayer+1)),
-     cellsCEH_(2*(maxlayer+1)),
-     points_(2*(maxlayer+1)),
-     minpos_(2*(maxlayer+1),{ {0.0f,0.0f} }),
-     maxpos_(2*(maxlayer+1),{ {0.0f,0.0f} }) {}
+     layerTiles_(2*(maxlayer+1)),
+     cells_(2*(maxlayer+1)),
+     numberOfClustersPerLayer_(2*(maxlayer+1),0)
+     {}
 
   ~HGCalCLUEAlgo() override {}
 
   void populate(const HGCRecHitCollection &hits) override;
-  void populateLayerTiles(const HGCRecHitCollection &hits);
 
   // this is the method that will start the clusterisation (it is possible to invoke this method
   // more than once - but make sure it is with different hit collections (or else use reset)
@@ -74,6 +72,9 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
     for(auto& cells : cells_)
       cells.clear();
     
+    for(auto& tiles: layerTiles_)
+      tiles.clear();
+
   }
 
   Density getDensity() override;
@@ -140,20 +141,27 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
   std::vector<std::vector<double> > thresholds_;
   std::vector<std::vector<double> > v_sigmaNoise_;
 
+
+
   // initialization bool
   bool initialized_;
 
-  float outlierDeltaFactor_ = 2.f;
+  double outlierDeltaFactor_ = 2;
 
+
+
+
+
+  template<class T>
   struct CellsOnLayer {
     std::vector<DetId> detid;
-    std::vector<float> x; 
-    std::vector<float> y;
+    std::vector<T> x; 
+    std::vector<T> y;
 
-    std::vector<float> weight; 
-    std::vector<float> rho;
+    std::vector<T> weight; 
+    std::vector<T> rho;
 
-    std::vector<float> delta;
+    std::vector<T> delta;
     std::vector<int> nearestHigher;
     std::vector<int> clusterIndex;
     std::vector<float> sigmaNoise;
@@ -176,61 +184,17 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
     }
   };
 
-
-  template<class T>
-  struct CellsOnLayer {
-    std::vector<T> x; 
-    std::vector<T> y;
-    T z; 
-    std::vector<bool> isHalfCell;
-
-    std::vector<T> weight; 
-    std::vector<DetId> detid;
-    std::vector<T> rho;
-
-    std::vector<T> delta;
-    std::vector<int> nearestHigher;
-    std::vector<int> clusterIndex;
-    std::vector<float> sigmaNoise;
-    std::vector<float> thickness;
-
-  };
-
   //this are the tiles for the electromagnetic part
-  std::vector<HGCalLayerTiles<hgcalTilesConstants::CEE>> layerTilesCEE_;
-  //this are the tiles for the hadronic part
-  std::vector<HGCalLayerTiles<hgcalTilesConstants::CEH>> layerTilesCEH_;
+  std::vector<HGCalLayerTiles> layerTiles_;
+  
+  std::vector<CellsOnLayer<float> > cells_;
+  
 
-  std::vector<CellsOnLayer<double> > cellsCEE_;
-  std::vector<CellsOnLayer<double> > cellsCEH_;
+  std::vector<int> numberOfClustersPerLayer_;
 
-
-
-
-  typedef KDTreeLinkerAlgo<Hexel, 2> KDTree;
-  typedef KDTreeNodeInfoT<Hexel, 2> KDNode;
-
-  std::vector<std::vector<std::vector<KDNode> > > layerClustersPerLayer_;
-
-  std::vector<size_t> sort_by_delta(const std::vector<KDNode> &v) const {
-    std::vector<size_t> idx(v.size());
-    std::iota(std::begin(idx), std::end(idx), 0);
-    sort(idx.begin(), idx.end(),
-         [&v](size_t i1, size_t i2) { return v[i1].data.delta > v[i2].data.delta; });
-    return idx;
-  }
-
-  std::vector<std::vector<KDNode> > points_;  // a vector of vectors of hexels, one for each layer
-  //@@EM todo: the number of layers should be obtained programmatically - the range is 1-n instead
-  //of 0-n-1...
-
-  std::vector<std::array<float, 2> > minpos_;
-  std::vector<std::array<float, 2> > maxpos_;
-
-  // these functions should be in a helper class.
-  inline double distance2(const Hexel &pt1, const Hexel &pt2) const {  // distance squared
-    const double dx = pt1.x - pt2.x;
-    const double dy = pt1.y - pt2.y;
+  inline float distance2(int cell1, int cell2, int layerId) const {  // distance squared
+    const float dx = cells_[layerId].x[cell1] - cells_[layerId].x[cell2];
+    const float dy = cells_[layerId].y[cell1] - cells_[layerId].y[cell2];
     return (dx * dx + dy * dy);
   }  
 
@@ -238,13 +202,11 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
                          int cell2, int layerId) const {  // 2-d distance on the layer (x-y)
     return std::sqrt(distance2(cell1, cell2, layerId));
   }
-  
-  void prepareDataStructures(const unsigned int layerId);
-  void calculateLocalDensity(const HGCalLayerTiles& lt, const unsigned int layerId, float delta_c);  // return max density
-  void calculateDistanceToHigher(const HGCalLayerTiles& lt, const unsigned int layerId, float delta_c);
+  void calculateLocalDensity(const unsigned int layerId, float delta_c);  // return max density
+  void calculateDistanceToHigher(const unsigned int layerId, float delta_c);
   int findAndAssignClusters(const unsigned int layerId, float delta_c);
   math::XYZPoint calculatePosition(const std::vector<int> &v, const unsigned int layerId) const;
-  void setDensity(const unsigned int layerId);
+  // void setDensity(const std::vector<KDNode> &nd);
 };
 
 #endif
