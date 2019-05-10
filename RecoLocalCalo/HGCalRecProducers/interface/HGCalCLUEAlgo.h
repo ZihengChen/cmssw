@@ -208,8 +208,7 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
     return (dx * dx + dy * dy);
   }  
 
-  inline float distance(int cell1,
-                         int cell2, int layerId) const {  // 2-d distance on the layer (x-y)
+  inline float distance(int cell1, int cell2, int layerId) const {  // 2-d distance on the layer (x-y)
     return std::sqrt(distance2(cell1, cell2, layerId));
   }
   void calculateLocalDensity(const unsigned int layerId, float delta_c);  // return max density

@@ -14,6 +14,8 @@
 #include "tbb/task_arena.h"
 #include "tbb/tbb.h"
 #include <limits>
+#include <iostream>
+#include <fstream>
 
 
 using namespace hgcal_clustering;
@@ -68,7 +70,6 @@ void HGCalCLUEAlgo::populate(const HGCRecHitCollection &hits) {
     cells_[l].clusterIndex.resize(cellsSize,-1);
     cells_[l].followers.resize(cellsSize);
     cells_[l].isSeed.resize(cellsSize,false);
-    layerTiles_[l].fill(cells_[l].x,cells_[l].y);
   }
 }
 
@@ -91,7 +92,9 @@ void HGCalCLUEAlgo::makeClusters() {
         delta_c = vecDeltas_[1];
       else
         delta_c = vecDeltas_[2];
-      
+
+
+      layerTiles_[i].fill( cells_[i].x, cells_[i].y);
       calculateLocalDensity(i, delta_c);
       calculateDistanceToHigher(i, delta_c);
       numberOfClustersPerLayer_[i] = findAndAssignClusters(i,delta_c);
@@ -103,6 +106,11 @@ void HGCalCLUEAlgo::makeClusters() {
 }
 
 std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
+  std::ofstream hitsFile;
+  hitsFile.open ("hitsFile_tile.csv");
+  std::ofstream clusFile;
+  clusFile.open ("clusFile_tile.csv");
+
 
   std::vector<int> offsets(numberOfClustersPerLayer_.size(),0);
 
@@ -127,14 +135,16 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     auto& cellsOnLayer = cells_[layerId];
     unsigned int numberOfCells = cellsOnLayer.detid.size();
     auto firstClusterIdx = offsets[layerId];
-    
-    //FP
-    // std::cout << "Number of clusters on layer " << layerId << " " << numberOfClustersPerLayer_[layerId] <<  " number Of cells on layer " << numberOfCells << std::endl;
-    // for (unsigned int i = 0; i < numberOfCells; ++i )
-    // {   
-    //   std::cout << "i, delta, rho, energy, clusterId, followersize " << i << " , " << cellsOnLayer.delta[i] << " , " << cellsOnLayer.rho[i]<< " , " << cellsOnLayer.weight[i]<< " , " << cellsOnLayer.clusterIndex[i]<< " , " << cellsOnLayer.followers[i].size() << std::endl;
-    // }
-    
+
+    /////////////////////////////
+    //FP hits
+    std::cout << "Number of clusters on layer " << layerId << " " << numberOfClustersPerLayer_[layerId] <<  " number Of cells on layer " << numberOfCells << std::endl;
+    for (unsigned int i = 0; i < numberOfCells; ++i )
+    {   
+      std::cout << "i, delta, rho, energy, clusterId, followersize " << i << " , " << cellsOnLayer.delta[i] << " , " << cellsOnLayer.rho[i]<< " , " << cellsOnLayer.weight[i]<< " , " << cellsOnLayer.clusterIndex[i]<< " , " << cellsOnLayer.followers[i].size() << std::endl;
+      hitsFile << layerId<<"," <<i<<"," <<cellsOnLayer.x[i]<<"," <<cellsOnLayer.y[i]<<"," <<cellsOnLayer.rho[i]<<"," <<cellsOnLayer.delta[i] <<"," <<cellsOnLayer.nearestHigher[i]<<"," <<cellsOnLayer.clusterIndex[i] <<"\n";
+    }
+    /////////////////////////////
 
 
     for (unsigned int i = 0; i < numberOfCells; ++i )
@@ -172,23 +182,30 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     cellsIdInCluster.clear();
 
   }
-  //FP
+
+  /////////////////////////////
+  //FP 2d clusters
   int clusterid = 0; 
   for(auto& cl: clusters_v_)
   {
-
     std::cout << clusterid << " " << cl.hitsAndFractions().size() << " " << cl.energy() << " " << (uint32_t)(cl.hitsAndFractions()[0].first) << std::endl;
-    // assert(cl.hitsAndFractions().size()>0);
-    // assert(cl.energy() > 0);
+    clusFile << rhtools_.getLayerWithOffset(cl.seed()) <<"," << clusterid <<"," << cl.x()<<"," << cl.y()<<"," << cl.z()<<"," << cl.energy()<<"\n" ;
     clusterid++;
   }
+  /////////////////////////////
+
+
+  hitsFile.close();
+  clusFile.close();
+
   return clusters_v_;
 
 }
 
 
 
-math::XYZPoint HGCalCLUEAlgo::calculatePosition(const std::vector<int> &v, const unsigned int layerId) const {
+math::XYZPoint HGCalCLUEAlgo::calculatePosition(const std::vector<int> &v, const unsigned int layerId) const 
+{
   
   float total_weight = 0.f;
   float x = 0.f;
@@ -215,7 +232,6 @@ math::XYZPoint HGCalCLUEAlgo::calculatePosition(const std::vector<int> &v, const
   bool isSiliconCell = (thick != -1);
 
 
-// TODO: this is recomputing everything twice and overwriting the position with log weighting position
   if(isSiliconCell)
   {
     float total_weight_log = 0.f;
@@ -284,7 +300,8 @@ void HGCalCLUEAlgo::calculateLocalDensity(const unsigned int layerId, float delt
 }
 
 
-void HGCalCLUEAlgo::calculateDistanceToHigher(const unsigned int layerId, float delta_c) {
+void HGCalCLUEAlgo::calculateDistanceToHigher(const unsigned int layerId, float delta_c) 
+{
 
 
   auto& cellsOnLayer = cells_[layerId];
@@ -349,7 +366,8 @@ void HGCalCLUEAlgo::calculateDistanceToHigher(const unsigned int layerId, float 
 }
 
 
-int HGCalCLUEAlgo::findAndAssignClusters(const unsigned int layerId, float delta_c ) {
+int HGCalCLUEAlgo::findAndAssignClusters(const unsigned int layerId, float delta_c ) 
+{
    
   // this is called once per layer and endcap...
   // so when filling the cluster temporary vector of Hexels we resize each time
@@ -396,7 +414,8 @@ int HGCalCLUEAlgo::findAndAssignClusters(const unsigned int layerId, float delta
   return nClustersOnLayer;
 }
 
-void HGCalCLUEAlgo::computeThreshold() {
+void HGCalCLUEAlgo::computeThreshold() 
+{
   // To support the TDR geometry and also the post-TDR one (v9 onwards), we
   // need to change the logic of the vectors containing signal to noise and
   // thresholds. The first 3 indices will keep on addressing the different
