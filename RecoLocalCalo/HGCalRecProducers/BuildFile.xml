@@ -3,6 +3,8 @@
 <use   name="Geometry/HGCalGeometry"/>
 <use   name="clhep"/>
 <use   name="RecoLocalCalo/HGCalRecAlgos"/>
+<use   name="HeterogeneousCore/CUDAUtilities"/>
+<use   name="HeterogeneousCore/CUDAServices"/>
 <export>
   <lib   name="1"/>
 </export>

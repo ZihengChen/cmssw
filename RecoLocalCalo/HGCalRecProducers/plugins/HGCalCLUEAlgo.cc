@@ -9,14 +9,19 @@
 #include "Geometry/Records/interface/IdealGeometryRecord.h"
 
 #include "RecoEcal/EgammaCoreTools/interface/PositionCalc.h"
+
 //
 #include "DataFormats/CaloRecHit/interface/CaloID.h"
 #include "tbb/task_arena.h"
 #include "tbb/tbb.h"
 #include <limits>
+#include <fstream>
 
 
 using namespace hgcal_clustering;
+
+
+
 
 
 void HGCalCLUEAlgo::populate(const HGCRecHitCollection &hits) {
@@ -61,7 +66,7 @@ void HGCalCLUEAlgo::populate(const HGCRecHitCollection &hits) {
 }
 
 
-void HGCalCLUEAlgo::prepareDataStructures(unsigned int l)
+void HGCalCLUEAlgo::prepareAlgorithmVariables(unsigned int l)
 {
   auto cellsSize = cells_[l].detid.size();
   cells_[l].rho.resize(cellsSize,0);
@@ -69,8 +74,7 @@ void HGCalCLUEAlgo::prepareDataStructures(unsigned int l)
   cells_[l].nearestHigher.resize(cellsSize,-1);
   cells_[l].clusterIndex.resize(cellsSize,-1);
   cells_[l].followers.resize(cellsSize);
-  cells_[l].isSeed.resize(cellsSize,false);
-  layerTiles_[l].fill(cells_[l].x,cells_[l].y);
+  cells_[l].isSeed.resize(cellsSize,0);
 }
 
 // Create a vector of Hexels associated to one cluster from a collection of
@@ -82,6 +86,8 @@ void HGCalCLUEAlgo::makeClusters() {
   // assign all hits in each layer to a cluster core
   tbb::this_task_arena::isolate([&] {
     tbb::parallel_for(size_t(0), size_t(2 * maxlayer + 2), [&](size_t i) {
+
+      std::cout << "LAYER " << i <<std::endl;
       
       float delta_c;  // maximum search distance (critical distance) for local
                   // density calculation
@@ -92,10 +98,27 @@ void HGCalCLUEAlgo::makeClusters() {
       else
         delta_c = vecDeltas_[2];
 
-      prepareDataStructures(i);
-      calculateLocalDensity(i, delta_c);
-      calculateDistanceToHigher(i, delta_c);
-      numberOfClustersPerLayer_[i] = findAndAssignClusters(i,delta_c);
+      // ----------------
+      // run GPU Version
+      // ----------------
+      prepareAlgorithmVariables(i);
+      numberOfClustersPerLayer_[i] = HGCalRecAlgos::clueGPU(cells_[i], delta_c, kappa_, outlierDeltaFactor_);
+      for(unsigned int j=0; j<cells_[i].x.size(); j++)
+        std::cout << "GPU result " << j << " | (" << cells_[i].x[j] << "," << cells_[i].y[j] << ") | rho=" << cells_[i].rho[j] << " | energy=" << cells_[i].weight[j] << " | delta=" << cells_[i].delta[j] << " | nh=" << cells_[i].nearestHigher[j] << " | clIdx=" << cells_[i].clusterIndex[j] << " | isSeed=" << cells_[i].isSeed[j] << std::endl;
+
+
+
+      // // ----------------
+      // // run CPU Version
+      // // ---------------- 
+      // prepareAlgorithmVariables(i);
+      // layerTiles_[i].fill(cells_[i].x,cells_[i].y);
+      // calculateLocalDensity(i, delta_c);
+      // calculateDistanceToHigher(i, delta_c);
+      // numberOfClustersPerLayer_[i] = findAndAssignClusters(i,delta_c);
+      // for(unsigned int j=0; j<cells_[i].x.size(); j++)
+      //   std::cout << "CPU result " << j << " | (" << cells_[i].x[j] << "," << cells_[i].y[j] << ") | rho=" << cells_[i].rho[j] << " | energy=" << cells_[i].weight[j] << " | delta=" << cells_[i].delta[j] << " | nh=" << cells_[i].nearestHigher[j] << " | clIdx=" << cells_[i].clusterIndex[j] << " | isSeed=" << cells_[i].isSeed[j] << std::endl;
+      
   
     });
   });
@@ -104,6 +127,11 @@ void HGCalCLUEAlgo::makeClusters() {
 }
 
 std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
+  std::ofstream hitsFile;
+  hitsFile.open ("hitsFile_tile_GPU.csv");
+  std::ofstream clusFile;
+  clusFile.open ("clusFile_tile_GPU.csv");
+
 
   std::vector<int> offsets(numberOfClustersPerLayer_.size(),0);
 
@@ -115,7 +143,6 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
 
     maxClustersOnLayer = std::max(maxClustersOnLayer, numberOfClustersPerLayer_[layerId]);
   }
-
 
   auto totalNumberOfClusters = offsets.back()+numberOfClustersPerLayer_.back();
   clusters_v_.resize(totalNumberOfClusters);
@@ -129,6 +156,12 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     unsigned int numberOfCells = cellsOnLayer.detid.size();
     auto firstClusterIdx = offsets[layerId];
     
+    /////////////////////////////
+    // file hits
+    for (unsigned int i = 0; i < numberOfCells; ++i )
+      hitsFile << layerId<<"," <<i<<"," <<cellsOnLayer.x[i]<<"," <<cellsOnLayer.y[i]<<"," <<cellsOnLayer.rho[i]<<"," <<cellsOnLayer.delta[i] <<"," <<cellsOnLayer.nearestHigher[i]<<"," <<cellsOnLayer.clusterIndex[i] <<"\n";
+    /////////////////////////////
+
     for (unsigned int i = 0; i < numberOfCells; ++i )
     {   
       auto clusterIndex = cellsOnLayer.clusterIndex[i];
@@ -136,7 +169,6 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
         cellsIdInCluster[clusterIndex].push_back(i);
     }
     
-
     std::vector<std::pair<DetId, float>> thisCluster;
     
     for(auto& cl: cellsIdInCluster)
@@ -144,18 +176,16 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
       auto position = calculatePosition(cl, layerId);
       float energy = 0.f;
       int seedDetId = -1;
-      
       for(auto cellIdx : cl)
       {
         energy+= cellsOnLayer.weight[cellIdx];
         thisCluster.emplace_back(cellsOnLayer.detid[cellIdx],1.f);
-        if(cellsOnLayer.isSeed[cellIdx])
+        if(cellsOnLayer.isSeed[cellIdx]==1)
         {
           seedDetId = cellsOnLayer.detid[cellIdx];
         }
       }
       auto globalClusterIndex = cellsOnLayer.clusterIndex[cl[0]] +  firstClusterIdx;
-      
       clusters_v_[globalClusterIndex]=reco::BasicCluster(energy, position, reco::CaloID::DET_HGCAL_ENDCAP, thisCluster, algoId_);
       clusters_v_[globalClusterIndex].setSeed(seedDetId);
       thisCluster.clear();
@@ -164,6 +194,18 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     cellsIdInCluster.clear();
 
   }
+  /////////////////////////////
+  // file 2d clusters
+  int clusterid = 0; 
+  for(auto& cl: clusters_v_)
+  {
+    clusFile << rhtools_.getLayerWithOffset(cl.seed()) <<"," << clusterid <<"," << cl.x()<<"," << cl.y()<<"," << cl.z()<<"," << cl.energy()<<"\n" ;
+    clusterid++;
+  }
+  /////////////////////////////
+
+  hitsFile.close();
+  clusFile.close();
 
   return clusters_v_;
 
@@ -198,7 +240,6 @@ math::XYZPoint HGCalCLUEAlgo::calculatePosition(const std::vector<int> &v, const
   bool isSiliconCell = (thick != -1);
 
 
-// TODO: this is recomputing everything twice and overwriting the position with log weighting position
   if(isSiliconCell)
   {
     float total_weight_log = 0.f;
@@ -221,7 +262,6 @@ math::XYZPoint HGCalCLUEAlgo::calculatePosition(const std::vector<int> &v, const
     for (auto i : v) {
 
       float rhEnergy = cellsOnLayer.weight[i];
-      total_weight += rhEnergy;
 
       x += cellsOnLayer.x[i] * rhEnergy;
       y += cellsOnLayer.y[i] * rhEnergy;
@@ -352,7 +392,7 @@ int HGCalCLUEAlgo::findAndAssignClusters(const unsigned int layerId, float delta
     if (isSeed) 
     {
       cellsOnLayer.clusterIndex[i] = nClustersOnLayer;
-      cellsOnLayer.isSeed[i] = true;
+      cellsOnLayer.isSeed[i] = 1;
       nClustersOnLayer++;
       localStack.push_back(i);
     
