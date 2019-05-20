@@ -98,27 +98,18 @@ void HGCalCLUEAlgo::makeClusters() {
       else
         delta_c = vecDeltas_[2];
 
-      // ----------------
       // run GPU Version
-      // ----------------
       prepareAlgorithmVariables(i);
       numberOfClustersPerLayer_[i] = HGCalRecAlgos::clueGPU(cells_[i], delta_c, kappa_, outlierDeltaFactor_);
-      for(unsigned int j=0; j<cells_[i].x.size(); j++)
-        std::cout << "GPU result " << j << " | (" << cells_[i].x[j] << "," << cells_[i].y[j] << ") | rho=" << cells_[i].rho[j] << " | energy=" << cells_[i].weight[j] << " | delta=" << cells_[i].delta[j] << " | nh=" << cells_[i].nearestHigher[j] << " | clIdx=" << cells_[i].clusterIndex[j] << " | isSeed=" << cells_[i].isSeed[j] << std::endl;
 
 
-
-      // // ----------------
       // // run CPU Version
-      // // ---------------- 
       // prepareAlgorithmVariables(i);
       // layerTiles_[i].fill(cells_[i].x,cells_[i].y);
       // calculateLocalDensity(i, delta_c);
       // calculateDistanceToHigher(i, delta_c);
       // numberOfClustersPerLayer_[i] = findAndAssignClusters(i,delta_c);
-      // for(unsigned int j=0; j<cells_[i].x.size(); j++)
-      //   std::cout << "CPU result " << j << " | (" << cells_[i].x[j] << "," << cells_[i].y[j] << ") | rho=" << cells_[i].rho[j] << " | energy=" << cells_[i].weight[j] << " | delta=" << cells_[i].delta[j] << " | nh=" << cells_[i].nearestHigher[j] << " | clIdx=" << cells_[i].clusterIndex[j] << " | isSeed=" << cells_[i].isSeed[j] << std::endl;
-      
+
   
     });
   });
@@ -157,7 +148,7 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     auto firstClusterIdx = offsets[layerId];
     
     /////////////////////////////
-    // file hits
+    // save file hits
     for (unsigned int i = 0; i < numberOfCells; ++i )
       hitsFile << layerId<<"," <<i<<"," <<cellsOnLayer.x[i]<<"," <<cellsOnLayer.y[i]<<"," <<cellsOnLayer.rho[i]<<"," <<cellsOnLayer.delta[i] <<"," <<cellsOnLayer.nearestHigher[i]<<"," <<cellsOnLayer.clusterIndex[i] <<"\n";
     /////////////////////////////
@@ -195,7 +186,7 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
 
   }
   /////////////////////////////
-  // file 2d clusters
+  // save file 2d clusters
   int clusterid = 0; 
   for(auto& cl: clusters_v_)
   {
@@ -461,3 +452,7 @@ void HGCalCLUEAlgo::setDensity(const unsigned int layerId){
 Density HGCalCLUEAlgo::getDensity() {
   return density_;
 }
+
+
+// for(unsigned int j=0; j<cells_[i].x.size(); j++)
+//   std::cout << "CPU result " << j << " | (" << cells_[i].x[j] << "," << cells_[i].y[j] << ") | rho=" << cells_[i].rho[j] << " | energy=" << cells_[i].weight[j] << " | delta=" << cells_[i].delta[j] << " | nh=" << cells_[i].nearestHigher[j] << " | clIdx=" << cells_[i].clusterIndex[j] << " | isSeed=" << cells_[i].isSeed[j] << std::endl;
