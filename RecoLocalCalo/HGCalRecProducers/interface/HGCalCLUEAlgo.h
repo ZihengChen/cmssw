@@ -16,7 +16,6 @@
 
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalLayerTiles.h"
 
-
 #include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
 
 // C/C++ headers
@@ -148,42 +147,7 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
 
   double outlierDeltaFactor_ = 2;
 
-
-
-
-
-  template<class T>
-  struct CellsOnLayer {
-    std::vector<DetId> detid;
-    std::vector<T> x; 
-    std::vector<T> y;
-
-    std::vector<T> weight; 
-    std::vector<T> rho;
-
-    std::vector<T> delta;
-    std::vector<int> nearestHigher;
-    std::vector<int> clusterIndex;
-    std::vector<float> sigmaNoise;
-    std::vector< std::vector <int> > followers;
-    std::vector<bool> isSeed;
-
-    void clear()
-    {
-      detid.clear();
-      x.clear();
-      y.clear();
-      weight.clear();
-      rho.clear();
-      delta.clear();
-      nearestHigher.clear();
-      clusterIndex.clear();
-      sigmaNoise.clear();
-      followers.clear();
-      isSeed.clear();
-    }
-  };
-
+  
   //this are the tiles for the electromagnetic part
   std::vector<HGCalLayerTiles> layerTiles_;
   
@@ -203,12 +167,17 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
     return std::sqrt(distance2(cell1, cell2, layerId));
   }
   
-  void prepareDataStructures(const unsigned int layerId);
+  void prepareAlgorithmVariables(const unsigned int layerId);
   void calculateLocalDensity(const unsigned int layerId, float delta_c);  // return max density
   void calculateDistanceToHigher(const unsigned int layerId, float delta_c);
   int findAndAssignClusters(const unsigned int layerId, float delta_c);
   math::XYZPoint calculatePosition(const std::vector<int> &v, const unsigned int layerId) const;
   void setDensity(const unsigned int layerId);
+
 };
+
+namespace HGCalRecAlgos {
+  int clueGPU(CellsOnLayer<float>&, float, float, float  );
+}
 
 #endif

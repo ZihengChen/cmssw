@@ -9,7 +9,9 @@
 #include <vector>
 #include <array>
 #include <cmath>
+#include <iostream>
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalTilesConstants.h"
+#include "DataFormats/DetId/interface/DetId.h"
 
 class HGCalLayerTiles {
     public:
@@ -86,6 +88,50 @@ class HGCalLayerTiles {
         std::vector< std::vector<int> > tiles_;
         
 };
+
+
+
+  
+template<class T>
+struct CellsOnLayer {
+    std::vector<DetId> detid;
+    std::vector<T> x; 
+    std::vector<T> y;
+
+    std::vector<T> weight; 
+    std::vector<T> rho;
+
+    std::vector<T> delta;
+    std::vector<int> nearestHigher;
+    std::vector<int> clusterIndex;
+    std::vector<float> sigmaNoise;
+    std::vector< std::vector <int> > followers;
+    std::vector<int> isSeed;
+    // why use int instead of bool?
+    // https://en.cppreference.com/w/cpp/container/vector_bool
+    // std::vector<bool> behaves similarly to std::vector, but in order to be space efficient, it:
+    // Does not necessarily store its elements as a contiguous array (so &v[0] + n != &v[n])
+
+
+
+    void clear()
+    {
+        detid.clear();
+        x.clear();
+        y.clear();
+        weight.clear();
+        rho.clear();
+        delta.clear();
+        nearestHigher.clear();
+        clusterIndex.clear();
+        sigmaNoise.clear();
+        followers.clear();
+        isSeed.clear();
+    }
+};
+
+
+
 
 
 

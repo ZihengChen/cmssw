@@ -22,7 +22,7 @@ constexpr int32_t ceil(float num)
   constexpr float tileSize = 5.f;
   constexpr int nColumns = hgcalTilesConstants::ceil(maxX-minX/tileSize);
   constexpr int nRows    = hgcalTilesConstants::ceil(maxY-minY/tileSize);
-
+  constexpr int maxTileDepth = 40;
 }
 
 #endif // RecoLocalCalo_HGCalRecAlgos_interface_HGCalTilesConstants_h
