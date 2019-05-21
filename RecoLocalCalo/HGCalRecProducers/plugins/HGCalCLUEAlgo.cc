@@ -82,12 +82,11 @@ void HGCalCLUEAlgo::prepareAlgorithmVariables(unsigned int l)
 // this method can be invoked multiple times for the same event with different
 // input (reset should be called between events)
 void HGCalCLUEAlgo::makeClusters() {
-  // layerClustersPerLayer_.resize(2 * maxlayer + 2);
+
+  int totalNCells = 0;
   // assign all hits in each layer to a cluster core
   tbb::this_task_arena::isolate([&] {
     tbb::parallel_for(size_t(0), size_t(2 * maxlayer + 2), [&](size_t i) {
-
-      std::cout << "LAYER " << i <<std::endl;
       
       float delta_c;  // maximum search distance (critical distance) for local
                   // density calculation
@@ -98,30 +97,41 @@ void HGCalCLUEAlgo::makeClusters() {
       else
         delta_c = vecDeltas_[2];
 
-      // run GPU Version
-      prepareAlgorithmVariables(i);
-      numberOfClustersPerLayer_[i] = HGCalRecAlgos::clueGPU(cells_[i], delta_c, kappa_, outlierDeltaFactor_);
-
-
-      // // run CPU Version
+      // /////////////////////////////
+      // // run GPU Version
       // prepareAlgorithmVariables(i);
-      // layerTiles_[i].fill(cells_[i].x,cells_[i].y);
-      // calculateLocalDensity(i, delta_c);
-      // calculateDistanceToHigher(i, delta_c);
-      // numberOfClustersPerLayer_[i] = findAndAssignClusters(i,delta_c);
+      // numberOfClustersPerLayer_[i] = HGCalRecAlgos::clueGPU(cells_[i], delta_c, kappa_, outlierDeltaFactor_);
+      // /////////////////////////////
 
-  
+
+
+      /////////////////////////////
+      // run CPU Version
+      prepareAlgorithmVariables(i);
+      layerTiles_[i].fill(cells_[i].x,cells_[i].y);
+      calculateLocalDensity(i, delta_c);
+      calculateDistanceToHigher(i, delta_c);
+      numberOfClustersPerLayer_[i] = findAndAssignClusters(i,delta_c);
+      
+      /////////////////////////////
+      // print for check
+      totalNCells += cells_[i].detid.size();
+      // std::cout << "LAYER " << i << ", numberOfCells = " << cells_[i].detid.size() << ", numberOfClusters = " << numberOfClustersPerLayer_[i] << std::endl;
+      // for(unsigned int j=0; j<cells_[i].x.size(); j++)
+      //   std::cout << "result " << j << " | (" << cells_[i].x[j] << "," << cells_[i].y[j] << ") | rho=" << cells_[i].rho[j] << " | energy=" << cells_[i].weight[j] << " | delta=" << cells_[i].delta[j] << " | nh=" << cells_[i].nearestHigher[j] << " | clIdx=" << cells_[i].clusterIndex[j] << " | isSeed=" << cells_[i].isSeed[j] << std::endl;
+    
     });
   });
   //Now that we have the density per point we can store it
   for(unsigned int i=0; i< 2 * maxlayer + 2; ++i) { setDensity(i); }
+  std::cout << "totalNCells = " << totalNCells << std::endl;
 }
 
 std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
-  std::ofstream hitsFile;
-  hitsFile.open ("hitsFile_tile_GPU.csv");
-  std::ofstream clusFile;
-  clusFile.open ("clusFile_tile_GPU.csv");
+  // std::ofstream hitsFile;
+  // hitsFile.open ("hitsFile_tile_GPU.csv");
+  // std::ofstream clusFile;
+  // clusFile.open ("clusFile_tile_GPU.csv");
 
 
   std::vector<int> offsets(numberOfClustersPerLayer_.size(),0);
@@ -147,11 +157,11 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     unsigned int numberOfCells = cellsOnLayer.detid.size();
     auto firstClusterIdx = offsets[layerId];
     
-    /////////////////////////////
-    // save file hits
-    for (unsigned int i = 0; i < numberOfCells; ++i )
-      hitsFile << layerId<<"," <<i<<"," <<cellsOnLayer.x[i]<<"," <<cellsOnLayer.y[i]<<"," <<cellsOnLayer.rho[i]<<"," <<cellsOnLayer.delta[i] <<"," <<cellsOnLayer.nearestHigher[i]<<"," <<cellsOnLayer.clusterIndex[i] <<"\n";
-    /////////////////////////////
+    // /////////////////////////////
+    // // save file hits
+    // for (unsigned int i = 0; i < numberOfCells; ++i )
+    //   hitsFile << layerId<<"," <<i<<"," <<cellsOnLayer.x[i]<<"," <<cellsOnLayer.y[i]<<"," <<cellsOnLayer.rho[i]<<"," <<cellsOnLayer.delta[i] <<"," <<cellsOnLayer.nearestHigher[i]<<"," <<cellsOnLayer.clusterIndex[i] <<"\n";
+    // /////////////////////////////
 
     for (unsigned int i = 0; i < numberOfCells; ++i )
     {   
@@ -185,18 +195,18 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     cellsIdInCluster.clear();
 
   }
-  /////////////////////////////
+  // ///////////////////////////
   // save file 2d clusters
-  int clusterid = 0; 
-  for(auto& cl: clusters_v_)
-  {
-    clusFile << rhtools_.getLayerWithOffset(cl.seed()) <<"," << clusterid <<"," << cl.x()<<"," << cl.y()<<"," << cl.z()<<"," << cl.energy()<<"\n" ;
-    clusterid++;
-  }
-  /////////////////////////////
+  // int clusterid = 0; 
+  // for(auto& cl: clusters_v_)
+  // {
+  //   clusFile << rhtools_.getLayerWithOffset(cl.seed()) <<"," << clusterid <<"," << cl.x()<<"," << cl.y()<<"," << cl.z()<<"," << cl.energy()<<"\n" ;
+  //   clusterid++;
+  // }
+  // /////////////////////////////
 
-  hitsFile.close();
-  clusFile.close();
+  // hitsFile.close();
+  // clusFile.close();
 
   return clusters_v_;
 

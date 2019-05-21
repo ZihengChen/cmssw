@@ -135,6 +135,7 @@ void HGCalLayerClusterProducer::produce(edm::Event& evt,
   // timing in digi for BH not implemented for now
   std::unordered_map<uint32_t, float> hitmap;
 
+  auto start = std::chrono::high_resolution_clock::now();
   switch(algoId){
   case reco::CaloCluster::hgcal_em:
     evt.getByToken(hits_ee_token,ee_hits);
@@ -168,10 +169,22 @@ void HGCalLayerClusterProducer::produce(edm::Event& evt,
   default:
     break;
   }
+  auto finish = std::chrono::high_resolution_clock::now();
+  std::cout<< "1 Pre-processing  time = "<< (std::chrono::duration<double>(finish-start)).count()<<std::endl;
+
+  start = std::chrono::high_resolution_clock::now();
   algo->makeClusters();
+  finish = std::chrono::high_resolution_clock::now();
+  std::cout<< "2 clustering      time = "<< (std::chrono::duration<double>(finish-start)).count()<<std::endl;
+
+
+  start = std::chrono::high_resolution_clock::now();
   *clusters = algo->getClusters(false);
   if(doSharing)
     *clusters_sharing = algo->getClusters(true);
+  finish = std::chrono::high_resolution_clock::now();
+  std::cout<< "3 post-processing time = "<< (std::chrono::duration<double>(finish-start)).count()<<std::endl;
+
 
   auto clusterHandle = evt.put(std::move(clusters));
   auto clusterHandleSharing = evt.put(std::move(clusters_sharing),"sharing");

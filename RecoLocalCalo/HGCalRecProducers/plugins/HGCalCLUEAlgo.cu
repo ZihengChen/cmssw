@@ -16,7 +16,7 @@
 
 namespace HGCalRecAlgos{
 
-  static const int maxNSeeds = 1024; 
+  static const int maxNSeeds = 4096; 
   static const int maxNFollowers = 20; 
   static const int BufferSizePerSeed = 40; 
 
@@ -157,19 +157,21 @@ namespace HGCalRecAlgos{
     }
   } //kernel
 
+  __global__ void kernel_get_n_clusters(GPU::VecArray<int,maxNSeeds>* d_seeds, int* d_nClusters)
+  {
+    d_nClusters[0] = d_seeds[0].size();
+  }
 
   __global__ void kernel_assign_clusters( GPU::VecArray<int,maxNSeeds>* d_seeds, 
                                           GPU::VecArray<int,maxNFollowers>* d_followers,
                                           CellsOnLayerPtr d_cells,
                                           int* d_nClusters
-
                                           )
   {
     int idxCls = blockIdx.x * blockDim.x + threadIdx.x;
-    int nClusters = d_seeds[0].size();
-    d_nClusters[0] = nClusters;
 
-    if (idxCls < nClusters){
+
+    if (idxCls < d_nClusters[0]){
 
       // buffer is "localStack"
       int buffer[BufferSizePerSeed];
@@ -214,7 +216,7 @@ namespace HGCalRecAlgos{
   int clueGPU(CellsOnLayer<float>& cellsOnLayer, float delta_c, float kappa_, float outlierDeltaFactor_) {
 
     int numberOfCells = cellsOnLayer.detid.size();
-    std::cout << "numberOfCells = " << numberOfCells <<std::endl;
+
     
     CellsOnLayerPtr h_cells,d_cells;
     h_cells.initHost(cellsOnLayer);
@@ -242,18 +244,23 @@ namespace HGCalRecAlgos{
 
  
     // launch kernels
-    const dim3 blockSize(128,1,1);
-    const dim3 gridSize(ceil(numberOfCells/128.0),1,1);
-    const dim3 gridSize_seeds(ceil(maxNSeeds/128.0),1,1);
+    const dim3 blockSize(64,1,1);
+    const dim3 gridSize(ceil(numberOfCells/64.0),1,1);
     
     kernel_compute_histogram <<<gridSize,blockSize>>>(d_hist, d_cells, numberOfCells);
     kernel_compute_density <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c, numberOfCells);
     kernel_compute_distanceToHigher <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c, outlierDeltaFactor_, numberOfCells);
     kernel_find_clusters <<<gridSize,blockSize>>>(d_seeds, d_followers, d_cells, delta_c, kappa_, outlierDeltaFactor_, numberOfCells);
+    
+    const dim3 oneBlockSize(1,1,1);
+    const dim3 oneGridSize(1,1,1);
+    kernel_get_n_clusters <<<oneGridSize,oneBlockSize>>>(d_seeds,d_nClusters);
+    cudaMemcpy(h_nClusters, d_nClusters, sizeof(int), cudaMemcpyDeviceToHost);
+
+    const dim3 gridSize_seeds(ceil(*h_nClusters/64.0),1,1);
     kernel_assign_clusters <<<gridSize_seeds,blockSize>>>(d_seeds, d_followers, d_cells, d_nClusters);
 
     d_cells.cpyDToH(h_cells, numberOfCells);
-    cudaMemcpy(h_nClusters, d_nClusters, sizeof(int), cudaMemcpyDeviceToHost);
 
     d_cells.freeDevice();
     cudaFree(d_hist);
