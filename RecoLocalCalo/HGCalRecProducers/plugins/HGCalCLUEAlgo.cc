@@ -115,16 +115,15 @@ void HGCalCLUEAlgo::makeClusters() {
       
       /////////////////////////////
       // print for check
-      totalNCells += cells_[i].detid.size();
       // std::cout << "LAYER " << i << ", numberOfCells = " << cells_[i].detid.size() << ", numberOfClusters = " << numberOfClustersPerLayer_[i] << std::endl;
       // for(unsigned int j=0; j<cells_[i].x.size(); j++)
       //   std::cout << "result " << j << " | (" << cells_[i].x[j] << "," << cells_[i].y[j] << ") | rho=" << cells_[i].rho[j] << " | energy=" << cells_[i].weight[j] << " | delta=" << cells_[i].delta[j] << " | nh=" << cells_[i].nearestHigher[j] << " | clIdx=" << cells_[i].clusterIndex[j] << " | isSeed=" << cells_[i].isSeed[j] << std::endl;
-    
+      totalNCells += cells_[i].detid.size();
     });
   });
   //Now that we have the density per point we can store it
   for(unsigned int i=0; i< 2 * maxlayer + 2; ++i) { setDensity(i); }
-  std::cout << "totalNCells = " << totalNCells << std::endl;
+  std::cout << totalNCells << ",";
 }
 
 std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
