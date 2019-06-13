@@ -29,6 +29,7 @@
 
 #include "DataFormats/ParticleFlowReco/interface/PFCluster.h"
 #include "DataFormats/Common/interface/ValueMap.h"
+#include <fstream>
 
 using Density = hgcal_clustering::Density;
 
@@ -169,13 +170,24 @@ void HGCalLayerClusterProducer::produce(edm::Event& evt,
   default:
     break;
   }
+
+
+
+
+
   auto finish = std::chrono::high_resolution_clock::now();
   std::cout<< "1 Pre-processing  time = "<< (std::chrono::duration<double>(finish-start)).count()<<std::endl;
+  // executionTimeFile << (std::chrono::duration<double>(finish-start)).count() << ",";
 
+    
+  std::ofstream executionTimeFile;
+  executionTimeFile.open("executionTime.csv",std::ios_base::app);
+    
   start = std::chrono::high_resolution_clock::now();
   algo->makeClusters();
   finish = std::chrono::high_resolution_clock::now();
   std::cout<< "2 clustering      time = "<< (std::chrono::duration<double>(finish-start)).count()<<std::endl;
+  executionTimeFile << (std::chrono::duration<double>(finish-start)).count() << "\n";
 
 
   start = std::chrono::high_resolution_clock::now();
@@ -184,6 +196,7 @@ void HGCalLayerClusterProducer::produce(edm::Event& evt,
     *clusters_sharing = algo->getClusters(true);
   finish = std::chrono::high_resolution_clock::now();
   std::cout<< "3 post-processing time = "<< (std::chrono::duration<double>(finish-start)).count()<<std::endl;
+  // executionTimeFile << (std::chrono::duration<double>(finish-start)).count() << "\n";
 
 
   auto clusterHandle = evt.put(std::move(clusters));
