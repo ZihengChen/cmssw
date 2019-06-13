@@ -97,15 +97,15 @@ void HGCalCLUEAlgo::makeClusters() {
       else
         delta_c = vecDeltas_[2];
 
-      // /////////////////////////////
-      // // run GPU Version
+      /////////////////////////////
+      // run GPU Version
       // prepareAlgorithmVariables(i);
       // numberOfClustersPerLayer_[i] = HGCalRecAlgos::clueGPU(cells_[i], delta_c, kappa_, outlierDeltaFactor_);
-      // /////////////////////////////
 
 
 
-      /////////////////////////////
+
+      ///////////////////////////
       // run CPU Version
       prepareAlgorithmVariables(i);
       layerTiles_[i].fill(cells_[i].x,cells_[i].y);
