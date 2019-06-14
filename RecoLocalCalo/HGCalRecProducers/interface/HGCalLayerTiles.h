@@ -97,6 +97,7 @@ struct CellsOnLayer {
     std::vector<DetId> detid;
     std::vector<T> x; 
     std::vector<T> y;
+    std::vector<int> layer;
 
     std::vector<T> weight; 
     std::vector<T> rho;
@@ -119,6 +120,7 @@ struct CellsOnLayer {
         detid.clear();
         x.clear();
         y.clear();
+        layer.clear();
         weight.clear();
         rho.clear();
         delta.clear();

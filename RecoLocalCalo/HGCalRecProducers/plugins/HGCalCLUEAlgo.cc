@@ -59,6 +59,7 @@ void HGCalCLUEAlgo::populate(const HGCRecHitCollection &hits) {
     cells_[layer].detid.emplace_back(detid);
     cells_[layer].x.emplace_back(position.x());
     cells_[layer].y.emplace_back(position.y());
+    cells_[layer].layer.emplace_back(layer);
     cells_[layer].weight.emplace_back(hgrh.energy());
     cells_[layer].sigmaNoise.emplace_back(sigmaNoise);
   }
@@ -88,30 +89,25 @@ void HGCalCLUEAlgo::makeClusters() {
   tbb::this_task_arena::isolate([&] {
     tbb::parallel_for(size_t(0), size_t(2 * maxlayer + 2), [&](size_t i) {
       
-      float delta_c;  // maximum search distance (critical distance) for local
-                  // density calculation
-      if (i%maxlayer < lastLayerEE)
-        delta_c = vecDeltas_[0];
-      else if (i%maxlayer < lastLayerFH)
-        delta_c = vecDeltas_[1];
-      else
-        delta_c = vecDeltas_[2];
-
-      /////////////////////////////
-      // run GPU Version
-      // prepareAlgorithmVariables(i);
-      // numberOfClustersPerLayer_[i] = HGCalRecAlgos::clueGPU(cells_[i], delta_c, kappa_, outlierDeltaFactor_);
 
 
-
+      // float delta_c;  // maximum search distance (critical distance) for local
+      //             // density calculation
+      // if (i%maxlayer < lastLayerEE)
+      //   delta_c = vecDeltas_[0];
+      // else if (i%maxlayer < lastLayerFH)
+      //   delta_c = vecDeltas_[1];
+      // else
+      //   delta_c = vecDeltas_[2];
 
       ///////////////////////////
       // run CPU Version
-      prepareAlgorithmVariables(i);
-      layerTiles_[i].fill(cells_[i].x,cells_[i].y);
-      calculateLocalDensity(i, delta_c);
-      calculateDistanceToHigher(i, delta_c);
-      numberOfClustersPerLayer_[i] = findAndAssignClusters(i,delta_c);
+
+      // prepareAlgorithmVariables(i);
+      // layerTiles_[i].fill(cells_[i].x,cells_[i].y);
+      // calculateLocalDensity(i, delta_c);
+      // calculateDistanceToHigher(i, delta_c);
+      // numberOfClustersPerLayer_[i] = findAndAssignClusters(i,delta_c);
       
       /////////////////////////////
       // print for check
@@ -121,16 +117,20 @@ void HGCalCLUEAlgo::makeClusters() {
       totalNCells += cells_[i].detid.size();
     });
   });
+
+  HGCalRecAlgos::clueGPU(cells_, numberOfClustersPerLayer_, vecDeltas_[0], vecDeltas_[1], vecDeltas_[2], kappa_, outlierDeltaFactor_);
+
   //Now that we have the density per point we can store it
   for(unsigned int i=0; i< 2 * maxlayer + 2; ++i) { setDensity(i); }
   std::cout << totalNCells << ",";
 }
 
 std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
-  // std::ofstream hitsFile;
-  // hitsFile.open ("hitsFile_tile_GPU.csv");
-  // std::ofstream clusFile;
-  // clusFile.open ("clusFile_tile_GPU.csv");
+  //////////////////////////////
+  std::ofstream hitsFile;
+  hitsFile.open ("hitsFile_tile_GPU.csv");
+  std::ofstream clusFile;
+  clusFile.open ("clusFile_tile_GPU.csv");
 
 
   std::vector<int> offsets(numberOfClustersPerLayer_.size(),0);
@@ -156,11 +156,11 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     unsigned int numberOfCells = cellsOnLayer.detid.size();
     auto firstClusterIdx = offsets[layerId];
     
-    // /////////////////////////////
-    // // save file hits
-    // for (unsigned int i = 0; i < numberOfCells; ++i )
-    //   hitsFile << layerId<<"," <<i<<"," <<cellsOnLayer.x[i]<<"," <<cellsOnLayer.y[i]<<"," <<cellsOnLayer.rho[i]<<"," <<cellsOnLayer.delta[i] <<"," <<cellsOnLayer.nearestHigher[i]<<"," <<cellsOnLayer.clusterIndex[i] <<"\n";
-    // /////////////////////////////
+    /////////////////////////////
+    // save file hits
+    for (unsigned int i = 0; i < numberOfCells; ++i )
+      hitsFile << layerId<<"," <<i<<"," <<cellsOnLayer.x[i]<<"," <<cellsOnLayer.y[i]<<"," <<cellsOnLayer.rho[i]<<"," <<cellsOnLayer.delta[i] <<"," <<cellsOnLayer.nearestHigher[i]<<"," <<cellsOnLayer.clusterIndex[i] <<"\n";
+    /////////////////////////////
 
     for (unsigned int i = 0; i < numberOfCells; ++i )
     {   
@@ -194,18 +194,19 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     cellsIdInCluster.clear();
 
   }
-  // ///////////////////////////
+  ///////////////////////////
   // save file 2d clusters
-  // int clusterid = 0; 
-  // for(auto& cl: clusters_v_)
-  // {
-  //   clusFile << rhtools_.getLayerWithOffset(cl.seed()) <<"," << clusterid <<"," << cl.x()<<"," << cl.y()<<"," << cl.z()<<"," << cl.energy()<<"\n" ;
-  //   clusterid++;
-  // }
-  // /////////////////////////////
+  int clusterid = 0; 
+  for(auto& cl: clusters_v_)
+  {
+    clusFile << rhtools_.getLayerWithOffset(cl.seed()) <<"," << clusterid <<"," << cl.x()<<"," << cl.y()<<"," << cl.z()<<"," << cl.energy()<<"\n" ;
+    clusterid++;
+  }
+  hitsFile.close();
+  clusFile.close();
+  /////////////////////////////
 
-  // hitsFile.close();
-  // clusFile.close();
+
 
   return clusters_v_;
 
@@ -403,7 +404,6 @@ int HGCalCLUEAlgo::findAndAssignClusters(const unsigned int layerId, float delta
   // need to pass clusterIndex to their followers
   while (!localStack.empty()) {
     int endStack = localStack.back();
-    // RecHitGPU thisHit = hits[frontOfBuffer];
     auto& thisSeed = cellsOnLayer.followers[endStack];
     localStack.pop_back();
 
