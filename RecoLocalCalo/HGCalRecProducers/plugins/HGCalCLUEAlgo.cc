@@ -17,6 +17,9 @@
 #include <limits>
 #include <fstream>
 
+#include <chrono>
+#include <ctime>
+
 
 using namespace hgcal_clustering;
 
@@ -104,7 +107,6 @@ void HGCalCLUEAlgo::makeClusters() {
 
 
 
-
       ///////////////////////////
       // run CPU Version
       prepareAlgorithmVariables(i);
@@ -112,6 +114,7 @@ void HGCalCLUEAlgo::makeClusters() {
       calculateLocalDensity(i, delta_c);
       calculateDistanceToHigher(i, delta_c);
       numberOfClustersPerLayer_[i] = findAndAssignClusters(i,delta_c);
+
       
       /////////////////////////////
       // print for check
@@ -122,15 +125,15 @@ void HGCalCLUEAlgo::makeClusters() {
     });
   });
   //Now that we have the density per point we can store it
-  for(unsigned int i=0; i< 2 * maxlayer + 2; ++i) { setDensity(i); }
+  // for(unsigned int i=0; i< 2 * maxlayer + 2; ++i) { setDensity(i); }
   std::cout << totalNCells << ",";
 }
 
 std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
   // std::ofstream hitsFile;
-  // hitsFile.open ("hitsFile_tile_GPU.csv");
+  // hitsFile.open ("validation/hitsFile_tile_CPU.csv");
   // std::ofstream clusFile;
-  // clusFile.open ("clusFile_tile_GPU.csv");
+  // clusFile.open ("validation/clusFile_tile_CPU.csv");
 
 
   std::vector<int> offsets(numberOfClustersPerLayer_.size(),0);
@@ -202,10 +205,11 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
   //   clusFile << rhtools_.getLayerWithOffset(cl.seed()) <<"," << clusterid <<"," << cl.x()<<"," << cl.y()<<"," << cl.z()<<"," << cl.energy()<<"\n" ;
   //   clusterid++;
   // }
-  // /////////////////////////////
-
   // hitsFile.close();
   // clusFile.close();
+  // /////////////////////////////
+
+
 
   return clusters_v_;
 
