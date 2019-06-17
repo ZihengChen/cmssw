@@ -35,8 +35,8 @@ class HGCalLayerTilesGPU {
     __host__ __device__
     int getXBin(float x) const {
       int xBin = (x-minX_)*rX_;
-      // xBin = std::min(xBin,nColumns_);
-      // xBin = std::max(xBin,0);
+      xBin = min(xBin,nColumns_);
+      xBin = max(xBin,0);
       // cannot use std:clap
       return xBin;
     }
@@ -44,8 +44,8 @@ class HGCalLayerTilesGPU {
     __host__ __device__
     int getYBin(float y) const {
       int yBin = (y-minY_)*rY_;
-      // yBin = std::min(yBin,nRows_);
-      // yBin = std::max(yBin,0);
+      yBin = min(yBin,nRows_);
+      yBin = max(yBin,0);
       // cannot use std:clap
       return yBin;
     }
