@@ -57,31 +57,33 @@ namespace HGCalRecAlgos{
     
     int idxOne = blockIdx.x * blockDim.x + threadIdx.x;
     if (idxOne < numberOfCells){
+      double rho{0.};
       int layer = d_cells.layer[idxOne];
       float delta_c = getDeltaCFromLayer(layer, delta_c_EE, delta_c_FH, delta_c_BH);
-
+      float xOne = d_cells.x[idxOne];
+      float yOne = d_cells.y[idxOne];
       // search box with histogram
-      int xBinMin = d_hist[layer].getXBin( d_cells.x[idxOne] - delta_c);
-      int xBinMax = d_hist[layer].getXBin( d_cells.x[idxOne] + delta_c);
-      int yBinMin = d_hist[layer].getYBin( d_cells.y[idxOne] - delta_c);
-      int yBinMax = d_hist[layer].getYBin( d_cells.y[idxOne] + delta_c);
+      int4 search_box = d_hist[layer].searchBox(xOne - delta_c, xOne + delta_c, yOne - delta_c, yOne + delta_c);
 
       // loop over bins in search box
-      for(int xBin = xBinMin; xBin < xBinMax+1; ++xBin) {
-        for(int yBin = yBinMin; yBin < yBinMax+1; ++yBin) {
+      for(int xBin = search_box.x; xBin < search_box.y+1; ++xBin) {
+        for(int yBin = search_box.z; yBin < search_box.w+1; ++yBin) {
           int binIndex = d_hist[layer].getGlobalBinByBin(xBin,yBin);
           int binSize  = d_hist[layer][binIndex].size();
 
           // loop over bin contents
           for (int j = 0; j < binSize; j++) {
             int idxTwo = d_hist[layer][binIndex][j];
-            float distance = sqrt( (d_cells.x[idxOne]-d_cells.x[idxTwo])*(d_cells.x[idxOne]-d_cells.x[idxTwo]) + (d_cells.y[idxOne]-d_cells.y[idxTwo])*(d_cells.y[idxOne]-d_cells.y[idxTwo]));
+            float xTwo = d_cells.x[idxTwo];
+            float yTwo = d_cells.y[idxTwo];
+            float distance = std::sqrt((xOne-xTwo)*(xOne-xTwo) + (yOne-yTwo)*(yOne-yTwo));
             if(distance < delta_c) { 
-              d_cells.rho[idxOne] += (idxOne == idxTwo ? 1. : 0.5) * d_cells.weight[idxTwo];
+              rho += (idxOne == idxTwo ? 1. : 0.5) * d_cells.weight[idxTwo];              
             }
           }
         }
       }
+      d_cells.rho[idxOne] = rho;
     }
   } //kernel
 
@@ -102,24 +104,26 @@ namespace HGCalRecAlgos{
 
       float idxOne_delta = std::numeric_limits<float>::max();
       int idxOne_nearestHigher = -1;
+      float xOne = d_cells.x[idxOne];
+      float yOne = d_cells.y[idxOne];
+      float rhoOne = d_cells.rho[idxOne];
 
       // search box with histogram
-      int xBinMin = d_hist[layer].getXBin( d_cells.x[idxOne] - outlierDeltaFactor_*delta_c);
-      int xBinMax = d_hist[layer].getXBin( d_cells.x[idxOne] + outlierDeltaFactor_*delta_c);
-      int yBinMin = d_hist[layer].getYBin( d_cells.y[idxOne] - outlierDeltaFactor_*delta_c);
-      int yBinMax = d_hist[layer].getYBin( d_cells.y[idxOne] + outlierDeltaFactor_*delta_c);
+      int4 search_box = d_hist[layer].searchBox(xOne - delta_c, xOne + delta_c, yOne - delta_c, yOne + delta_c);
 
       // loop over bins in search box
-      for(int xBin = xBinMin; xBin < xBinMax+1; ++xBin) {
-        for(int yBin = yBinMin; yBin < yBinMax+1; ++yBin) {
+      for(int xBin = search_box.x; xBin < search_box.y+1; ++xBin) {
+        for(int yBin = search_box.z; yBin < search_box.w+1; ++yBin) {
           int binIndex = d_hist[layer].getGlobalBinByBin(xBin,yBin);
           int binSize  = d_hist[layer][binIndex].size();
 
           // loop over bin contents
           for (int j = 0; j < binSize; j++) {
             int idxTwo = d_hist[layer][binIndex][j];
-            float distance = sqrt( (d_cells.x[idxOne]-d_cells.x[idxTwo])*(d_cells.x[idxOne]-d_cells.x[idxTwo]) + (d_cells.y[idxOne]-d_cells.y[idxTwo])*(d_cells.y[idxOne]-d_cells.y[idxTwo]));
-            bool foundHigher = d_cells.rho[idxTwo] > d_cells.rho[idxOne];
+            float xTwo = d_cells.x[idxTwo];
+            float yTwo = d_cells.y[idxTwo];
+            float distance = std::sqrt((xOne-xTwo)*(xOne-xTwo) + (yOne-yTwo)*(yOne-yTwo));
+            bool foundHigher = d_cells.rho[idxTwo] > rhoOne;
             if(foundHigher && distance <= idxOne_delta) {
               // update i_delta
               idxOne_delta = distance;
@@ -167,8 +171,11 @@ namespace HGCalRecAlgos{
       // initialize clusterIndex
       d_cells.clusterIndex[idxOne] = -1;
 
-      bool isSeed = (d_cells.delta[idxOne] > delta_c) && (d_cells.rho[idxOne] >= rho_c);
-      bool isOutlier = (d_cells.delta[idxOne] > outlierDeltaFactor_*delta_c) && (d_cells.rho[idxOne] < rho_c);
+      float deltaOne = d_cells.delta[idxOne];
+      float rhoOne = d_cells.rho[idxOne];
+
+      bool isSeed = (deltaOne > delta_c) && (rhoOne >= rho_c);
+      bool isOutlier = (deltaOne > outlierDeltaFactor_*delta_c) && (rhoOne < rho_c);
 
       if (isSeed) {
         d_cells.isSeed[idxOne] = 1;
@@ -241,7 +248,7 @@ namespace HGCalRecAlgos{
 
 
 
-  void clueGPU(std::vector<CellsOnLayer<float>> & cells_, 
+  void clueGPU(std::vector<CellsOnLayer> & cells_, 
               std::vector<int> & numberOfClustersPerLayer_, 
               float delta_c_EE, 
               float delta_c_FH, 
@@ -259,7 +266,7 @@ namespace HGCalRecAlgos{
 
     int indexLayerEnd[numberOfLayers];
     // populate local SoA
-    CellsOnLayer<float> localSoA;
+    CellsOnLayer localSoA;
     for (int i=0; i < numberOfLayers; i++){
       localSoA.x.insert( localSoA.x.end(), cells_[i].x.begin(), cells_[i].x.end() );
       localSoA.y.insert( localSoA.y.end(), cells_[i].y.begin(), cells_[i].y.end() );
@@ -373,5 +380,4 @@ namespace HGCalRecAlgos{
 
 
 }//namespace
-
 

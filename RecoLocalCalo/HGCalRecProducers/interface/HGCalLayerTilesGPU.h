@@ -61,8 +61,8 @@ class HGCalLayerTilesGPU {
     }
 
     __host__ __device__
-    std::array<int,4> searchBox(float xMin, float xMax, float yMin, float yMax){
-      return std::array<int, 4>({{ getXBin(xMin), getXBin(xMax), getYBin(yMin), getYBin(yMax)}});
+    int4 searchBox(float xMin, float xMax, float yMin, float yMax){
+      return int4{ getXBin(xMin), getXBin(xMax), getYBin(yMin), getYBin(yMax)};
     }
 
     __host__ __device__
@@ -96,7 +96,7 @@ struct CellsOnLayerPtr
   int *isSeed;
 
 
-  void initHost(CellsOnLayer<float>& cellsOnLayer ){
+  void initHost(CellsOnLayer& cellsOnLayer ){
     x = cellsOnLayer.x.data();
     y = cellsOnLayer.y.data();
     layer = cellsOnLayer.layer.data();
@@ -116,24 +116,22 @@ struct CellsOnLayerPtr
     cudaMalloc(&layer, sizeof(int)*numberOfCells);
     cudaMalloc(&weight, sizeof(float)*numberOfCells);
     cudaMalloc(&sigmaNoise, sizeof(float)*numberOfCells);
+    cudaMalloc(&rho, sizeof(float)*numberOfCells);
+    cudaMalloc(&delta, sizeof(float)*numberOfCells);
+    cudaMalloc(&nearestHigher, sizeof(int)*numberOfCells);
+    cudaMalloc(&clusterIndex, sizeof(int)*numberOfCells);
+    cudaMalloc(&isSeed, sizeof(int)*numberOfCells);
+
     cudaMemcpy(x, h_cells.x, sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
     cudaMemcpy(y, h_cells.y, sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
     cudaMemcpy(layer, h_cells.layer, sizeof(int)*numberOfCells, cudaMemcpyHostToDevice);
     cudaMemcpy(weight, h_cells.weight, sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
     cudaMemcpy(sigmaNoise, h_cells.sigmaNoise, sizeof(float)*numberOfCells, cudaMemcpyHostToDevice); 
-
-
-    cudaMalloc(&rho, sizeof(float)*numberOfCells);
     cudaMemset(rho, 0x00, sizeof(float)*numberOfCells);
-    cudaMalloc(&delta, sizeof(float)*numberOfCells);
     cudaMemset(delta, 0x00, sizeof(float)*numberOfCells);
-    cudaMalloc(&nearestHigher, sizeof(int)*numberOfCells);
     cudaMemset(nearestHigher, 0x00, sizeof(int)*numberOfCells);
-    cudaMalloc(&clusterIndex, sizeof(int)*numberOfCells);
     cudaMemset(clusterIndex, 0x00, sizeof(int)*numberOfCells);
-    cudaMalloc(&isSeed, sizeof(int)*numberOfCells);
     cudaMemset(isSeed, 0x00, sizeof(int)*numberOfCells);
-    cudaMemcpy(isSeed, h_cells.isSeed, sizeof(int)*numberOfCells, cudaMemcpyHostToDevice); 
   }
 
   void cpyDToH(CellsOnLayerPtr h_cells, unsigned int numberOfCells){

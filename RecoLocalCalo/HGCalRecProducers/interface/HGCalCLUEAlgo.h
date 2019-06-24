@@ -151,7 +151,7 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
   //this are the tiles for the electromagnetic part
   std::vector<HGCalLayerTiles> layerTiles_;
   
-  std::vector<CellsOnLayer<float> > cells_;
+  std::vector<CellsOnLayer> cells_;
   
 
   std::vector<int> numberOfClustersPerLayer_;
@@ -177,7 +177,7 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
 };
 
 namespace HGCalRecAlgos {
-  void clueGPU(std::vector<CellsOnLayer<float>> &, std::vector<int> &, float, float, float, float, float  );
+  void clueGPU(std::vector<CellsOnLayer> &, std::vector<int> &, float, float, float, float, float  );
 }
 
 #endif

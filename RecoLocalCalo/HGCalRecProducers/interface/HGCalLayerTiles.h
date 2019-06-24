@@ -92,17 +92,16 @@ class HGCalLayerTiles {
 
 
   
-template<class T>
 struct CellsOnLayer {
     std::vector<DetId> detid;
-    std::vector<T> x; 
-    std::vector<T> y;
+    std::vector<float> x; 
+    std::vector<float> y;
     std::vector<int> layer;
 
-    std::vector<T> weight; 
-    std::vector<T> rho;
+    std::vector<float> weight; 
+    std::vector<float> rho;
 
-    std::vector<T> delta;
+    std::vector<float> delta;
     std::vector<int> nearestHigher;
     std::vector<int> clusterIndex;
     std::vector<float> sigmaNoise;
