@@ -17,13 +17,7 @@
 #include <limits>
 #include <fstream>
 
-#include <chrono>
-#include <ctime>
-
-
 using namespace hgcal_clustering;
-
-
 
 
 
