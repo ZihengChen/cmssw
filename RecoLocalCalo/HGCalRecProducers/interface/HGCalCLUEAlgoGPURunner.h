@@ -1,5 +1,10 @@
+#ifndef RecoLocalCalo_HGCalRecProducers_HGCalCLUEAlgoGPURunner_h
+#define RecoLocalCalo_HGCalRecProducers_HGCalCLUEAlgoGPURunner_h
+
+
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalLayerTiles.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/GPUVecArray.h"
+#include "RecoLocalCalo/HGCalRecProducers/interface/HGCalLayerTilesGPU.h"
 
 #include <cuda_runtime.h>
 #include <cuda.h>
@@ -17,6 +22,7 @@ static const int BufferSizePerSeed = 20;
 
 struct CellsOnLayerPtr
 {
+  unsigned int *detid;
   float *x; 
   float *y ;
   int *layer ;
@@ -38,6 +44,7 @@ class ClueGPURunner{
         unsigned int numberOfLayers = 0;
 
         CellsOnLayerPtr d_cells;
+        HGCalLayerTilesGPU *d_hist;
         GPU::VecArray<int,maxNSeeds> *d_seeds;
         GPU::VecArray<int,maxNFollowers> *d_followers;
         int *d_nClusters;
@@ -52,6 +59,7 @@ class ClueGPURunner{
 
         void init_device(){
             unsigned int reserveNumberOfCells = 1000000;
+            cudaMalloc(&d_cells.detid, sizeof(unsigned int)*reserveNumberOfCells);
             cudaMalloc(&d_cells.x, sizeof(float)*reserveNumberOfCells);
             cudaMalloc(&d_cells.y, sizeof(float)*reserveNumberOfCells);
             cudaMalloc(&d_cells.layer, sizeof(int)*reserveNumberOfCells);
@@ -64,12 +72,14 @@ class ClueGPURunner{
             cudaMalloc(&d_cells.isSeed, sizeof(int)*reserveNumberOfCells);
 
             unsigned int reserveNumberOfLayers = maxlayer*2 + 2;
+            cudaMalloc(&d_hist, sizeof(HGCalLayerTilesGPU) * reserveNumberOfLayers);
             cudaMalloc(&d_seeds, sizeof(GPU::VecArray<int,maxNSeeds>) * reserveNumberOfLayers);
             cudaMalloc(&d_followers, sizeof(GPU::VecArray<int,maxNFollowers>)*reserveNumberOfCells);
             cudaMalloc(&d_nClusters, sizeof(int)*reserveNumberOfLayers);
         }
 
         void free_device(){
+            cudaFree(d_cells.detid);
             cudaFree(d_cells.x);
             cudaFree(d_cells.y);
             cudaFree(d_cells.layer);
@@ -82,6 +92,7 @@ class ClueGPURunner{
             cudaFree(d_cells.clusterIndex);
             cudaFree(d_cells.isSeed);
 
+            cudaFree(d_hist);
             cudaFree(d_seeds);
             cudaFree(d_followers);
             cudaFree(d_nClusters);
@@ -100,6 +111,7 @@ class ClueGPURunner{
 
 
         void copy_todevice(CellsOnLayer& cellsOnLayer){
+            cudaMemcpy(d_cells.detid, cellsOnLayer.detid.data(), sizeof(unsigned int)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.x, cellsOnLayer.x.data(), sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.y, cellsOnLayer.y.data(), sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.layer, cellsOnLayer.layer.data(), sizeof(int)*numberOfCells, cudaMemcpyHostToDevice);
@@ -108,12 +120,13 @@ class ClueGPURunner{
         }
 
         void clear_set(){
-            cudaMemset(d_cells.rho, 0x00, sizeof(float)*numberOfCells);
-            cudaMemset(d_cells.delta, 0x00, sizeof(float)*numberOfCells);
-            cudaMemset(d_cells.nearestHigher, 0x00, sizeof(int)*numberOfCells);
-            cudaMemset(d_cells.clusterIndex, 0x00, sizeof(int)*numberOfCells);
-            cudaMemset(d_cells.isSeed, 0x00, sizeof(int)*numberOfCells);
+            // cudaMemset(d_cells.rho, 0x00, sizeof(float)*numberOfCells);
+            // cudaMemset(d_cells.delta, 0x00, sizeof(float)*numberOfCells);
+            // cudaMemset(d_cells.nearestHigher, 0x00, sizeof(int)*numberOfCells);
+            // cudaMemset(d_cells.clusterIndex, 0x00, sizeof(int)*numberOfCells);
+            // cudaMemset(d_cells.isSeed, 0x00, sizeof(int)*numberOfCells);
 
+            cudaMemset(d_hist, 0x00, sizeof(HGCalLayerTilesGPU) * numberOfLayers);
             cudaMemset(d_seeds, 0x00, sizeof(GPU::VecArray<int,maxNSeeds>) * numberOfLayers);
             cudaMemset(d_followers, 0x00, sizeof(GPU::VecArray<int,maxNFollowers>)*numberOfCells);
             cudaMemset(d_nClusters, 0x00, sizeof(int)*numberOfLayers);
@@ -132,3 +145,4 @@ class ClueGPURunner{
 
         
 };
+#endif

@@ -21,22 +21,24 @@ const float rY_ = nRows_/(maxY_-minY_);
 
 class HGCalLayerTilesGPU {
   public:
-    HGCalLayerTilesGPU()
-    {}
+    HGCalLayerTilesGPU() {}
 
+
+    #ifdef __CUDACC__
     // overload the fill function on device
     __device__
     void fill(float x, float y, int i)
     {   
       tiles_[getGlobalBin(x,y)].push_back(i);
     }
+    #endif // __CUDACC__
 
 
     __host__ __device__
     int getXBin(float x) const {
       int xBin = (x-minX_)*rX_;
-      xBin = min(xBin,nColumns_);
-      xBin = max(xBin,0);
+      xBin = (xBin<nColumns_ ? xBin:nColumns_);
+      xBin = (xBin>0 ? xBin:0);
       // cannot use std:clap
       return xBin;
     }
@@ -44,8 +46,8 @@ class HGCalLayerTilesGPU {
     __host__ __device__
     int getYBin(float y) const {
       int yBin = (y-minY_)*rY_;
-      yBin = min(yBin,nRows_);
-      yBin = max(yBin,0);
+      yBin = (yBin<nRows_ ? yBin:nRows_);
+      yBin = (yBin>0 ? yBin:0);;
       // cannot use std:clap
       return yBin;
     }

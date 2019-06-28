@@ -1,8 +1,5 @@
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalLayerTilesGPU.h"
-
-
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalCLUEAlgoGPURunner.h"
-
 
 
 //GPU Add
@@ -97,6 +94,7 @@ __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist,
     float xOne = d_cells.x[idxOne];
     float yOne = d_cells.y[idxOne];
     float rhoOne = d_cells.rho[idxOne];
+    unsigned int detidOne = d_cells.detid[idxOne];
 
     // search box with histogram
     int4 search_box = d_hist[layer].searchBox(xOne - delta_c, xOne + delta_c, yOne - delta_c, yOne + delta_c);
@@ -113,7 +111,7 @@ __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist,
           float xTwo = d_cells.x[idxTwo];
           float yTwo = d_cells.y[idxTwo];
           float distance = std::sqrt((xOne-xTwo)*(xOne-xTwo) + (yOne-yTwo)*(yOne-yTwo));
-          bool foundHigher = d_cells.rho[idxTwo] > rhoOne;
+          bool foundHigher = (d_cells.rho[idxTwo] > rhoOne) || (d_cells.rho[idxTwo] == rhoOne && d_cells.detid[idxTwo] > detidOne);
           if(foundHigher && distance <= idxOne_delta) {
             // update i_delta
             idxOne_delta = distance;
@@ -255,6 +253,7 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   // populate local SoA
   CellsOnLayer localSoA;
   for (int i=0; i < numberOfLayers; i++){
+    localSoA.detid.insert( localSoA.detid.end(), cells_[i].detid.begin(), cells_[i].detid.end() ); 
     localSoA.x.insert( localSoA.x.end(), cells_[i].x.begin(), cells_[i].x.end() );
     localSoA.y.insert( localSoA.y.end(), cells_[i].y.begin(), cells_[i].y.end() );
     localSoA.layer.insert( localSoA.layer.end(), cells_[i].layer.begin(), cells_[i].layer.end() );
@@ -288,12 +287,6 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   copy_todevice(localSoA);
   clear_set();
 
-  // TODO: move to constructor
-  // define local variables : hist
-  HGCalLayerTilesGPU *d_hist;
-  cudaMalloc(&d_hist, sizeof(HGCalLayerTilesGPU) * numberOfLayers);
-  cudaMemset(d_hist, 0x00, sizeof(HGCalLayerTilesGPU) * numberOfLayers);
-
   // launch kernels
   const dim3 blockSize(64,1,1);
   const dim3 gridSize(ceil(numberOfCells/64.0),1,1);
@@ -311,7 +304,6 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   kernel_assign_clusters <<<gridSize_nlayers,blockSize_1024>>>(d_seeds, d_followers, d_cells, d_nClusters);
 
   copy_tohost(localSoA,numberOfClustersPerLayer_);
-  cudaFree(d_hist); // TODO: move to distructor
   // auto finish2 = std::chrono::high_resolution_clock::now();
 
   //////////////////////////////////////////////
