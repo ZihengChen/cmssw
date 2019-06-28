@@ -18,10 +18,14 @@
 
 #include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
 
+#include "RecoLocalCalo/HGCalRecProducers/interface/HGCalCLUEAlgoGPURunner.cuh"
+
 // C/C++ headers
 #include <set>
 #include <string>
 #include <vector>
+
+
 
 using Density=hgcal_clustering::Density;
 
@@ -140,7 +144,7 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
   std::vector<std::vector<double> > thresholds_;
   std::vector<std::vector<double> > v_sigmaNoise_;
 
-
+  ClueGPURunner gpuRunner;
 
   // initialization bool
   bool initialized_;
@@ -175,9 +179,5 @@ class HGCalCLUEAlgo : public HGCalClusteringAlgoBase {
   void setDensity(const unsigned int layerId);
 
 };
-
-namespace HGCalRecAlgos {
-  void clueGPU(std::vector<CellsOnLayer> &, std::vector<int> &, float, float, float, float, float  );
-}
 
 #endif

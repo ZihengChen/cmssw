@@ -1,6 +1,7 @@
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalCLUEAlgo.h"
 
-
+// #include <cuda_runtime.h>
+// #include <cuda.h>
 
 // Geometry
 #include "DataFormats/HcalDetId/interface/HcalSubdetector.h"
@@ -17,11 +18,13 @@
 #include <limits>
 #include <fstream>
 
+
+
 using namespace hgcal_clustering;
 
 
 
-
+ 
 
 void HGCalCLUEAlgo::populate(const HGCRecHitCollection &hits) {
   // loop over all hits and create the Hexel structure, skip energies below ecut
@@ -83,7 +86,7 @@ void HGCalCLUEAlgo::prepareAlgorithmVariables(unsigned int l)
 // input (reset should be called between events)
 void HGCalCLUEAlgo::makeClusters() {
 
-  HGCalRecAlgos::clueGPU(cells_, numberOfClustersPerLayer_, vecDeltas_[0], vecDeltas_[1], vecDeltas_[2], kappa_, outlierDeltaFactor_);
+  gpuRunner.clueGPU(cells_, numberOfClustersPerLayer_, vecDeltas_[0], vecDeltas_[1], vecDeltas_[2], kappa_, outlierDeltaFactor_);
 
   //Now that we have the density per point we can store it
   //for(unsigned int i=0; i< 2 * maxlayer + 2; ++i) { setDensity(i); }
