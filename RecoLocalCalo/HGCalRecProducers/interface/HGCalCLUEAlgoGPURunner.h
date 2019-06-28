@@ -133,9 +133,9 @@ class ClueGPURunner{
         }
 
         void copy_tohost(CellsOnLayer& cellsOnLayer, std::vector<int> & numberOfClustersPerLayer_){
-            cudaMemcpy(cellsOnLayer.rho.data(), d_cells.rho, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
-            cudaMemcpy(cellsOnLayer.delta.data(), d_cells.delta, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
-            cudaMemcpy(cellsOnLayer.nearestHigher.data(), d_cells.nearestHigher, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
+            // cudaMemcpy(cellsOnLayer.rho.data(), d_cells.rho, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
+            // cudaMemcpy(cellsOnLayer.delta.data(), d_cells.delta, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
+            // cudaMemcpy(cellsOnLayer.nearestHigher.data(), d_cells.nearestHigher, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
             cudaMemcpy(cellsOnLayer.clusterIndex.data(), d_cells.clusterIndex, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
             cudaMemcpy(cellsOnLayer.isSeed.data(), d_cells.isSeed, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
             cudaMemcpy(numberOfClustersPerLayer_.data(), d_nClusters, sizeof(int)*numberOfLayers, cudaMemcpyDeviceToHost);
