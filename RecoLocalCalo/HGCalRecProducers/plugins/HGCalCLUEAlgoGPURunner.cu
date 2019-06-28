@@ -1,8 +1,7 @@
-#include "RecoLocalCalo/HGCalRecProducers/interface/HGCalLayerTiles.h"
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalLayerTilesGPU.h"
 
-#include "HeterogeneousCore/CUDAUtilities/interface/GPUVecArray.h"
-#include "RecoLocalCalo/HGCalRecProducers/interface/HGCalCLUEAlgoGPURunner.cuh"
+
+#include "RecoLocalCalo/HGCalRecProducers/interface/HGCalCLUEAlgoGPURunner.h"
 
 
 
@@ -15,16 +14,6 @@
 #include <chrono>
 #include <ctime>
 
-
-
-// This has to be the same as cpu version
-static const unsigned int maxlayer = 52;
-static const unsigned int lastLayerEE = 28;
-static const unsigned int lastLayerFH = 40;
-
-static const int maxNSeeds = 4096; 
-static const int maxNFollowers = 20; 
-static const int BufferSizePerSeed = 20; 
 
 
 __device__ float getDeltaCFromLayer(int layer, float delta_c_EE, float delta_c_FH, float delta_c_BH){
@@ -192,7 +181,6 @@ __global__ void kernel_find_clusters( GPU::VecArray<int,maxNSeeds>* d_seeds,
 
 __global__ void kernel_get_n_clusters(GPU::VecArray<int,maxNSeeds>* d_seeds, int* d_nClusters)
 { 
-  
   int idxLayer = threadIdx.x;
   d_nClusters[idxLayer] = d_seeds[idxLayer].size();
 }
@@ -247,8 +235,6 @@ __global__ void kernel_assign_clusters( GPU::VecArray<int,maxNSeeds>* d_seeds,
 
 
 
-
-
 void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
             std::vector<int> & numberOfClustersPerLayer_, 
             float delta_c_EE, 
@@ -297,58 +283,35 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   //////////////////////////////////////////////
   // auto start2 = std::chrono::high_resolution_clock::now();
 
-  assign_cells_number(numberOfCells);
-  init_host(localSoA);
+  assign_number_of_cells(numberOfCells);
+  assign_number_of_layers(numberOfLayers);
+  copy_todevice(localSoA);
   clear_set();
-  copy_todevice();
 
-
+  // TODO: move to constructor
   // define local variables : hist
   HGCalLayerTilesGPU *d_hist;
   cudaMalloc(&d_hist, sizeof(HGCalLayerTilesGPU) * numberOfLayers);
   cudaMemset(d_hist, 0x00, sizeof(HGCalLayerTilesGPU) * numberOfLayers);
-  // define local variables :  seeds   
-  GPU::VecArray<int,maxNSeeds> *d_seeds;
-  cudaMalloc(&d_seeds, sizeof(GPU::VecArray<int,maxNSeeds>) * numberOfLayers);
-  cudaMemset(d_seeds, 0x00, sizeof(GPU::VecArray<int,maxNSeeds>) * numberOfLayers);
-  // define local variables :  followers
-  GPU::VecArray<int,maxNFollowers> *d_followers;
-  cudaMalloc(&d_followers, sizeof(GPU::VecArray<int,maxNFollowers>)*numberOfCells);
-  cudaMemset(d_followers, 0x00, sizeof(GPU::VecArray<int,maxNFollowers>)*numberOfCells);
-
-
 
   // launch kernels
   const dim3 blockSize(64,1,1);
   const dim3 gridSize(ceil(numberOfCells/64.0),1,1);
-  
   kernel_compute_histogram <<<gridSize,blockSize>>>(d_hist, d_cells, numberOfCells);
   kernel_compute_density <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, numberOfCells);
   kernel_compute_distanceToHigher <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, outlierDeltaFactor_, numberOfCells);
-  kernel_find_clusters <<<gridSize,blockSize>>>(d_seeds, d_followers, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, kappa_, outlierDeltaFactor_, numberOfCells);
-
-  // define local variables :  nclusters
-  int *h_nClusters, *d_nClusters;
-  h_nClusters = numberOfClustersPerLayer_.data();
-  cudaMalloc(&d_nClusters, sizeof(int)*numberOfLayers);
-  cudaMemset(d_nClusters, 0x00, sizeof(int)*numberOfLayers);
-  const dim3 nlayerBlockSize(numberOfLayers,1,1);
-  const dim3 oneGridSize(1,1,1);
-  kernel_get_n_clusters <<<oneGridSize,nlayerBlockSize>>>(d_seeds,d_nClusters);
-  cudaMemcpy(h_nClusters, d_nClusters, sizeof(int)*numberOfLayers, cudaMemcpyDeviceToHost);
-
-  // assign clusters
-  const dim3 BlockSize1024(1024,1);
-  const dim3 nlayerGridSize(numberOfLayers,ceil(maxNSeeds/1024.0),1);
+  kernel_find_clusters <<<gridSize,blockSize>>>(d_seeds, d_followers, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, kappa_, outlierDeltaFactor_, numberOfCells);  
   
-  kernel_assign_clusters <<<nlayerGridSize,BlockSize1024>>>(d_seeds, d_followers, d_cells, d_nClusters);
+  const dim3 blockSize_nlayers(numberOfLayers,1,1);
+  const dim3 gridSize_1(1,1,1);
+  kernel_get_n_clusters <<<gridSize_1,blockSize_nlayers>>>(d_seeds,d_nClusters);
 
-  copy_tohost();
-  // cuda free
-  cudaFree(d_hist);
-  cudaFree(d_seeds);
-  cudaFree(d_followers);
-  cudaFree(d_nClusters);
+  const dim3 blockSize_1024(1024,1);
+  const dim3 gridSize_nlayers(numberOfLayers,ceil(maxNSeeds/1024.0),1);
+  kernel_assign_clusters <<<gridSize_nlayers,blockSize_1024>>>(d_seeds, d_followers, d_cells, d_nClusters);
+
+  copy_tohost(localSoA,numberOfClustersPerLayer_);
+  cudaFree(d_hist); // TODO: move to distructor
   // auto finish2 = std::chrono::high_resolution_clock::now();
 
   //////////////////////////////////////////////

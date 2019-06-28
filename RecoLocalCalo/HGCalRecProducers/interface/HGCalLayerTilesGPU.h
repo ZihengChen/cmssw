@@ -1,5 +1,5 @@
-#ifndef RecoLocalCalo_HGCalRecAlgos_HGCalLayerTilesGPU
-#define RecoLocalCalo_HGCalRecAlgos_HGCalLayerTilesGPU
+#ifndef RecoLocalCalo_HGCalRecProducers_HGCalLayerTilesGPU
+#define RecoLocalCalo_HGCalRecProducers_HGCalLayerTilesGPU
 
 #include <memory>
 #include <cmath>

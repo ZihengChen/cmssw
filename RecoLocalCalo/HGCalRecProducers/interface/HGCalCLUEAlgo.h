@@ -18,7 +18,7 @@
 
 #include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
 
-#include "RecoLocalCalo/HGCalRecProducers/interface/HGCalCLUEAlgoGPURunner.cuh"
+#include "RecoLocalCalo/HGCalRecProducers/interface/HGCalCLUEAlgoGPURunner.h"
 
 // C/C++ headers
 #include <set>

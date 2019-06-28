@@ -91,12 +91,12 @@ void HGCalCLUEAlgo::makeClusters() {
 }
 
 std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
-  // //////////////////////////////
-  // std::ofstream hitsFile;
-  // hitsFile.open ("./validation/hitsFile_tile_GPU_V3.csv");
-  // std::ofstream clusFile;
-  // clusFile.open ("./validation/clusFile_tile_GPU_V3.csv");
-  // /////////////////////////////
+  //////////////////////////////
+  std::ofstream hitsFile;
+  hitsFile.open ("./validation/hitsFile_tile_GPU_V3.csv");
+  std::ofstream clusFile;
+  clusFile.open ("./validation/clusFile_tile_GPU_V3.csv");
+  /////////////////////////////
 
 
   std::vector<int> offsets(numberOfClustersPerLayer_.size(),0);
@@ -122,11 +122,11 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     unsigned int numberOfCells = cellsOnLayer.detid.size();
     auto firstClusterIdx = offsets[layerId];
     
-    // /////////////////////////////
-    // // save file hits
-    // for (unsigned int i = 0; i < numberOfCells; ++i )
-    //   hitsFile << layerId<<"," <<i<<"," <<cellsOnLayer.x[i]<<"," <<cellsOnLayer.y[i]<<"," <<cellsOnLayer.rho[i]<<"," <<cellsOnLayer.delta[i] <<"," <<cellsOnLayer.nearestHigher[i]<<"," <<cellsOnLayer.clusterIndex[i] <<"\n";
-    // /////////////////////////////
+    /////////////////////////////
+    // save file hits
+    for (unsigned int i = 0; i < numberOfCells; ++i )
+      hitsFile << layerId<<"," <<i<<"," <<cellsOnLayer.x[i]<<"," <<cellsOnLayer.y[i]<<"," <<cellsOnLayer.rho[i]<<"," <<cellsOnLayer.delta[i] <<"," <<cellsOnLayer.nearestHigher[i]<<"," <<cellsOnLayer.clusterIndex[i] <<"\n";
+    /////////////////////////////
 
     for (unsigned int i = 0; i < numberOfCells; ++i )
     {   
@@ -160,17 +160,17 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     cellsIdInCluster.clear();
 
   }
-  // /////////////////////////
-  // // save file 2d clusters
-  // int clusterid = 0; 
-  // for(auto& cl: clusters_v_)
-  // {
-  //   clusFile << rhtools_.getLayerWithOffset(cl.seed()) <<"," << clusterid <<"," << cl.x()<<"," << cl.y()<<"," << cl.z()<<"," << cl.energy()<<"\n" ;
-  //   clusterid++;
-  // }
-  // hitsFile.close();
-  // clusFile.close();
-  // /////////////////////////////
+  /////////////////////////
+  // save file 2d clusters
+  int clusterid = 0; 
+  for(auto& cl: clusters_v_)
+  {
+    clusFile << rhtools_.getLayerWithOffset(cl.seed()) <<"," << clusterid <<"," << cl.x()<<"," << cl.y()<<"," << cl.z()<<"," << cl.energy()<<"\n" ;
+    clusterid++;
+  }
+  hitsFile.close();
+  clusFile.close();
+  /////////////////////////////
 
 
 
