@@ -135,9 +135,9 @@ struct CellsOnLayerPtr
   }
 
   void cpyDToH(CellsOnLayerPtr h_cells, unsigned int numberOfCells){
-    cudaMemcpy(h_cells.rho, rho, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_cells.delta, delta, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_cells.nearestHigher, nearestHigher, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
+    // cudaMemcpy(h_cells.rho, rho, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
+    // cudaMemcpy(h_cells.delta, delta, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
+    // cudaMemcpy(h_cells.nearestHigher, nearestHigher, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_cells.clusterIndex, clusterIndex, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_cells.isSeed, isSeed, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
   }

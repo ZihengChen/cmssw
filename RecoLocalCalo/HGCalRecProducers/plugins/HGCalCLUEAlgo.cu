@@ -262,7 +262,7 @@ namespace HGCalRecAlgos{
     // copy from cells to local SoA
     // this is fast and takes 3~4 ms on a PU200 event
     //////////////////////////////////////////////
-    auto start1 = std::chrono::high_resolution_clock::now();
+    // auto start1 = std::chrono::high_resolution_clock::now();
 
     int indexLayerEnd[numberOfLayers];
     // populate local SoA
@@ -289,12 +289,12 @@ namespace HGCalRecAlgos{
     localSoA.nearestHigher.resize(numberOfCells,-1);
     localSoA.clusterIndex.resize(numberOfCells,-1);
     localSoA.isSeed.resize(numberOfCells,0);
-    auto finish1 = std::chrono::high_resolution_clock::now();
+    // auto finish1 = std::chrono::high_resolution_clock::now();
 
     //////////////////////////////////////////////
     // run on GPU
     //////////////////////////////////////////////
-    auto start2 = std::chrono::high_resolution_clock::now();
+    // auto start2 = std::chrono::high_resolution_clock::now();
 
     CellsOnLayerPtr h_cells,d_cells;
     h_cells.initHost(localSoA);
@@ -347,13 +347,13 @@ namespace HGCalRecAlgos{
     cudaFree(d_seeds);
     cudaFree(d_followers);
     cudaFree(d_nClusters);
-    auto finish2 = std::chrono::high_resolution_clock::now();
+    // auto finish2 = std::chrono::high_resolution_clock::now();
 
     //////////////////////////////////////////////
     // copy from local SoA to cells 
     // this is fast and takes 1~2 ms on a PU200 event
     //////////////////////////////////////////////
-    auto start3 = std::chrono::high_resolution_clock::now();
+    // auto start3 = std::chrono::high_resolution_clock::now();
     for (int i=0; i < numberOfLayers; i++){
       int numberOfCellsOnLayer = cells_[i].weight.size();
       int indexBegin = indexLayerEnd[i]+1 - numberOfCellsOnLayer;
@@ -371,10 +371,10 @@ namespace HGCalRecAlgos{
       memcpy(cells_[i].isSeed.data(), &localSoA.isSeed[indexBegin], sizeof(int)*numberOfCellsOnLayer);
     }
 
-    auto finish3 = std::chrono::high_resolution_clock::now();
-    std::cout << (std::chrono::duration<double>(finish1-start1)).count() << "," 
-              << (std::chrono::duration<double>(finish2-start2)).count() << ","
-              << (std::chrono::duration<double>(finish3-start3)).count() << ",";
+    // auto finish3 = std::chrono::high_resolution_clock::now();
+    // std::cout << (std::chrono::duration<double>(finish1-start1)).count() << "," 
+    //           << (std::chrono::duration<double>(finish2-start2)).count() << ","
+    //           << (std::chrono::duration<double>(finish3-start3)).count() << ",";
 
   }
 
