@@ -297,10 +297,10 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   //////////////////////////////////////////////
   // auto start2 = std::chrono::high_resolution_clock::now();
 
-  ClueGPURunner::assign_cells_number(numberOfCells);
-  ClueGPURunner::init_host(localSoA);
-  ClueGPURunner::clear_set();
-  ClueGPURunner::copy_todevice();
+  assign_cells_number(numberOfCells);
+  init_host(localSoA);
+  clear_set();
+  copy_todevice();
 
 
   // define local variables : hist
@@ -322,10 +322,10 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   const dim3 blockSize(64,1,1);
   const dim3 gridSize(ceil(numberOfCells/64.0),1,1);
   
-  kernel_compute_histogram <<<gridSize,blockSize>>>(d_hist, ClueGPURunner::d_cells, numberOfCells);
-  kernel_compute_density <<<gridSize,blockSize>>>(d_hist, ClueGPURunner::d_cells, delta_c_EE, delta_c_FH, delta_c_BH, numberOfCells);
-  kernel_compute_distanceToHigher <<<gridSize,blockSize>>>(d_hist, ClueGPURunner::d_cells, delta_c_EE, delta_c_FH, delta_c_BH, outlierDeltaFactor_, numberOfCells);
-  kernel_find_clusters <<<gridSize,blockSize>>>(d_seeds, d_followers, ClueGPURunner::d_cells, delta_c_EE, delta_c_FH, delta_c_BH, kappa_, outlierDeltaFactor_, numberOfCells);
+  kernel_compute_histogram <<<gridSize,blockSize>>>(d_hist, d_cells, numberOfCells);
+  kernel_compute_density <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, numberOfCells);
+  kernel_compute_distanceToHigher <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, outlierDeltaFactor_, numberOfCells);
+  kernel_find_clusters <<<gridSize,blockSize>>>(d_seeds, d_followers, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, kappa_, outlierDeltaFactor_, numberOfCells);
 
   // define local variables :  nclusters
   int *h_nClusters, *d_nClusters;
@@ -341,9 +341,9 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   const dim3 BlockSize1024(1024,1);
   const dim3 nlayerGridSize(numberOfLayers,ceil(maxNSeeds/1024.0),1);
   
-  kernel_assign_clusters <<<nlayerGridSize,BlockSize1024>>>(d_seeds, d_followers, ClueGPURunner::d_cells, d_nClusters);
+  kernel_assign_clusters <<<nlayerGridSize,BlockSize1024>>>(d_seeds, d_followers, d_cells, d_nClusters);
 
-  ClueGPURunner::copy_tohost();
+  copy_tohost();
   // cuda free
   cudaFree(d_hist);
   cudaFree(d_seeds);

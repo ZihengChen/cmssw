@@ -21,9 +21,6 @@
 
 
 using namespace hgcal_clustering;
-
-
-
  
 
 void HGCalCLUEAlgo::populate(const HGCRecHitCollection &hits) {
@@ -96,9 +93,9 @@ void HGCalCLUEAlgo::makeClusters() {
 std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
   // //////////////////////////////
   // std::ofstream hitsFile;
-  // hitsFile.open ("./validation/hitsFile_tile_GPU_V2.csv");
+  // hitsFile.open ("./validation/hitsFile_tile_GPU_V3.csv");
   // std::ofstream clusFile;
-  // clusFile.open ("./validation/clusFile_tile_GPU_V2.csv");
+  // clusFile.open ("./validation/clusFile_tile_GPU_V3.csv");
   // /////////////////////////////
 
 
@@ -163,7 +160,7 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
     cellsIdInCluster.clear();
 
   }
-  ///////////////////////////
+  // /////////////////////////
   // // save file 2d clusters
   // int clusterid = 0; 
   // for(auto& cl: clusters_v_)

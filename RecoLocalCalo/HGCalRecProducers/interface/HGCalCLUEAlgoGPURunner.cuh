@@ -72,7 +72,6 @@ class ClueGPURunner{
             cudaMemcpy(d_cells.layer, h_cells.layer, sizeof(int)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.weight, h_cells.weight, sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.sigmaNoise,h_cells.sigmaNoise, sizeof(float)*numberOfCells, cudaMemcpyHostToDevice); 
-            cudaMemcpy(d_cells.isSeed, h_cells.isSeed, sizeof(int)*numberOfCells, cudaMemcpyHostToDevice); 
         }
 
         void clear_set(){
@@ -84,9 +83,9 @@ class ClueGPURunner{
         }
 
         void copy_tohost(){
-            // cudaMemcpy(h_cells.rho, d_cells.rho, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
-            // cudaMemcpy(h_cells.delta, d_cells.delta, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
-            // cudaMemcpy(h_cells.nearestHigher, d_cells.nearestHigher, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
+            cudaMemcpy(h_cells.rho, d_cells.rho, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
+            cudaMemcpy(h_cells.delta, d_cells.delta, sizeof(float)*numberOfCells, cudaMemcpyDeviceToHost);
+            cudaMemcpy(h_cells.nearestHigher, d_cells.nearestHigher, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
             cudaMemcpy(h_cells.clusterIndex, d_cells.clusterIndex, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
             cudaMemcpy(h_cells.isSeed, d_cells.isSeed, sizeof(int)*numberOfCells, cudaMemcpyDeviceToHost);
         }
@@ -97,6 +96,7 @@ class ClueGPURunner{
             cudaFree(d_cells.layer);
             cudaFree(d_cells.weight);
             cudaFree(d_cells.sigmaNoise);
+            
             cudaFree(d_cells.rho);
             cudaFree(d_cells.delta);
             cudaFree(d_cells.nearestHigher);
