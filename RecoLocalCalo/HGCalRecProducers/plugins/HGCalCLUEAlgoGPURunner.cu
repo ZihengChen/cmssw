@@ -33,6 +33,7 @@ __global__ void kernel_compute_histogram( HGCalLayerTilesGPU *d_hist,
     int layer = d_cells.layer[idx];
     d_hist[layer].fill(d_cells.x[idx], d_cells.y[idx], idx);
   }
+  
 } //kernel
 
 __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist, 
@@ -94,7 +95,6 @@ __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist,
     float xOne = d_cells.x[idxOne];
     float yOne = d_cells.y[idxOne];
     float rhoOne = d_cells.rho[idxOne];
-    unsigned int detidOne = d_cells.detid[idxOne];
 
     // search box with histogram
     int4 search_box = d_hist[layer].searchBox(xOne - delta_c, xOne + delta_c, yOne - delta_c, yOne + delta_c);
@@ -111,7 +111,11 @@ __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist,
           float xTwo = d_cells.x[idxTwo];
           float yTwo = d_cells.y[idxTwo];
           float distance = std::sqrt((xOne-xTwo)*(xOne-xTwo) + (yOne-yTwo)*(yOne-yTwo));
-          bool foundHigher = (d_cells.rho[idxTwo] > rhoOne) || (d_cells.rho[idxTwo] == rhoOne && d_cells.detid[idxTwo] > detidOne);
+          bool foundHigher = (d_cells.rho[idxTwo] > rhoOne) ;
+          // in the rare case where rho is the same, use detid
+          if (d_cells.rho[idxTwo] == rhoOne) {
+            foundHigher = d_cells.detid[idxTwo] > d_cells.detid[idxOne];
+          }
           if(foundHigher && distance <= idxOne_delta) {
             // update i_delta
             idxOne_delta = distance;
@@ -288,8 +292,8 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   clear_set();
 
   // launch kernels
-  const dim3 blockSize(64,1,1);
-  const dim3 gridSize(ceil(numberOfCells/64.0),1,1);
+  const dim3 blockSize(1024,1,1);
+  const dim3 gridSize(ceil(numberOfCells/1024.0),1,1);
   kernel_compute_histogram <<<gridSize,blockSize>>>(d_hist, d_cells, numberOfCells);
   kernel_compute_density <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, numberOfCells);
   kernel_compute_distanceToHigher <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, outlierDeltaFactor_, numberOfCells);
@@ -299,9 +303,8 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   const dim3 gridSize_1(1,1,1);
   kernel_get_n_clusters <<<gridSize_1,blockSize_nlayers>>>(d_seeds,d_nClusters);
 
-  const dim3 blockSize_1024(1024,1);
   const dim3 gridSize_nlayers(numberOfLayers,ceil(maxNSeeds/1024.0),1);
-  kernel_assign_clusters <<<gridSize_nlayers,blockSize_1024>>>(d_seeds, d_followers, d_cells, d_nClusters);
+  kernel_assign_clusters <<<gridSize_nlayers,blockSize>>>(d_seeds, d_followers, d_cells, d_nClusters);
 
   copy_tohost(localSoA,numberOfClustersPerLayer_);
   // auto finish2 = std::chrono::high_resolution_clock::now();
