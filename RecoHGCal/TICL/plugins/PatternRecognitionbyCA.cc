@@ -8,6 +8,8 @@
 #include "PatternRecognitionbyCA.h"
 #include "HGCGraph.h"
 
+#include "PhysicsTools/TensorFlow/interface/TensorFlow.h"
+
 using namespace ticl;
 
 PatternRecognitionbyCA::PatternRecognitionbyCA(const edm::ParameterSet &conf) : PatternRecognitionAlgoBase(conf) {
@@ -90,4 +92,50 @@ void PatternRecognitionbyCA::makeTracksters(const edm::Event &ev,
                                     << " count: " << (int)trackster.vertex_multiplicity[i] << std::endl;
     }
   }
+
+  ///////////////////////////////////////////
+  // MARK -- TensorFlow session
+  ///////////////////////////////////////////
+
+  unsigned numberOfTracksters = result.size();
+  std::vector<std::array<float, 52> > tracksterEnergyOnLayer(numberOfTracksters);
+  std::string pbFile = "/afs/cern.ch/user/z/zichen/public/TICL/CMSSW_11_0_X_2019-07-02-2300/src/RecoHGCal/TICL/plugins/ticlnet.pb";
+  tensorflow::GraphDef* graphDef = tensorflow::loadGraphDef(pbFile);
+  tensorflow::Session* session = tensorflow::createSession(graphDef);
+  tensorflow::Tensor input(tensorflow::DT_FLOAT, tensorflow::TensorShape({1, 1, 52}));
+  std::vector<tensorflow::Tensor> outputs;
+
+  for(unsigned i = 0; i < numberOfTracksters; ++i)
+  {
+    float tracksterTotalEnergy = 0.f;
+    for(unsigned j = 0; j < result[i].vertices.size(); j++)
+    {
+      const auto& lc = layerClusters[result[i].vertices[j]];
+
+      const auto firstHitDetId = lc.hitsAndFractions()[0].first;
+      int layer = rhtools_.getLayerWithOffset(firstHitDetId);
+      tracksterEnergyOnLayer[i][layer] +=lc.energy();
+      tracksterTotalEnergy +=lc.energy();
+    }
+
+    for(unsigned j = 0; j < 52; j++)
+    {
+      tracksterEnergyOnLayer[i][j] /= tracksterTotalEnergy;
+      input.flat<float>().data()[j] = tracksterEnergyOnLayer[i][j];
+      std::cout << i << " " << j << " " << tracksterEnergyOnLayer[i][j] << std::endl;
+    }
+
+    // tensorflow::Status status = session->Run({ { "layerEnergy", input } },{ "particleId" }, {}, &outputs);
+    tensorflow::run(session, { { "input", input  }}, { "output/Softmax" }, &outputs);
+
+    std::cout << outputs.size() << std::endl;
+    std::cout << "P electron: " << outputs[0].matrix<float>()(0,0) << std::endl;
+    std::cout << "P photon: " << outputs[0].matrix<float>()(0,1) << std::endl;
+    std::cout << "P hadron: " << outputs[0].matrix<float>()(0,2) << std::endl;
+    std::cout << "P muon: " << outputs[0].matrix<float>()(0,3) << std::endl;
+    outputs.clear();
+
+  }
+  // end of tensorflow session
+
 }
