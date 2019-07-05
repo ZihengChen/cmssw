@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <set>
 #include <vector>
+#include <array>
 
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "PatternRecognitionbyCA.h"
@@ -93,47 +94,80 @@ void PatternRecognitionbyCA::makeTracksters(const edm::Event &ev,
     }
   }
 
+
   ///////////////////////////////////////////
   // MARK -- TensorFlow session
   ///////////////////////////////////////////
 
   unsigned numberOfTracksters = result.size();
-  std::vector<std::array<float, 52> > tracksterEnergyOnLayer(numberOfTracksters);
-  std::string pbFile = "/afs/cern.ch/user/z/zichen/public/TICL/CMSSW_11_0_X_2019-07-02-2300/src/RecoHGCal/TICL/plugins/ticlnet.pb";
+  std::string pbFile = "/afs/cern.ch/user/z/zichen/public/TICL/CMSSW_11_0_X_2019-07-02-2300/src/RecoHGCal/TICL/plugins/CNN.pb";
   tensorflow::GraphDef* graphDef = tensorflow::loadGraphDef(pbFile);
   tensorflow::Session* session = tensorflow::createSession(graphDef);
-  tensorflow::Tensor input(tensorflow::DT_FLOAT, tensorflow::TensorShape({1, 1, 52}));
   std::vector<tensorflow::Tensor> outputs;
 
   for(unsigned i = 0; i < numberOfTracksters; ++i)
-  {
-    float tracksterTotalEnergy = 0.f;
+  {   
+    
+    // save trackster features
+    std::vector<std::vector<std::array<float, 3> >>  tracksterFeature;
+    tracksterFeature.resize(53);
+
+    float tracksterSumClEnergy = 0;
     for(unsigned j = 0; j < result[i].vertices.size(); j++)
     {
       const auto& lc = layerClusters[result[i].vertices[j]];
-
+      std::array<float, 3> lcEtaPhiE {{ float(lc.eta()), float(lc.phi()), float(lc.energy()) }};
       const auto firstHitDetId = lc.hitsAndFractions()[0].first;
-      int layer = rhtools_.getLayerWithOffset(firstHitDetId);
-      tracksterEnergyOnLayer[i][layer] +=lc.energy();
-      tracksterTotalEnergy +=lc.energy();
+      int layer = rhtools_.getLayerWithOffset(firstHitDetId) - 1;
+      tracksterFeature[layer].push_back(lcEtaPhiE);
+      tracksterSumClEnergy += float(lc.energy());
     }
 
-    for(unsigned j = 0; j < 52; j++)
-    {
-      tracksterEnergyOnLayer[i][j] /= tracksterTotalEnergy;
-      input.flat<float>().data()[j] = tracksterEnergyOnLayer[i][j];
-      std::cout << i << " " << j << " " << tracksterEnergyOnLayer[i][j] << std::endl;
+    // run tensorflow for trackster > 5 GeV
+    if (tracksterSumClEnergy>5) {
+      tensorflow::Tensor input(tensorflow::DT_FLOAT, tensorflow::TensorShape({ 1, 50, 10, 3})); // BxHxWxC
+      // input.clear()
+      // loop over layers to prepare input
+      for(unsigned layer = 0; layer < 50; layer++)
+      {
+        // sort decreasing energy
+        std::vector<std::array<float, 3>> layerData = tracksterFeature[layer];
+        sort(layerData.begin(), layerData.end(), [](const std::array<float, 3> & a, const std::array<float, 3> & b) {return a[2] > b[2];});
+        // push clusters to pixels of image
+        for (unsigned icluster=0; icluster<10; icluster++) {
+          if (icluster<layerData.size()){
+            input.flat<float>().data()[3*10*layer+3*icluster+0] = layerData[icluster][0];
+            input.flat<float>().data()[3*10*layer+3*icluster+1] = layerData[icluster][1];
+            input.flat<float>().data()[3*10*layer+3*icluster+2] = layerData[icluster][2];
+            std::cout << i << "," << layer << "," << layerData[icluster][0] << ", " << layerData[icluster][1] << ", " << layerData[icluster][2] << std::endl;
+          }
+          else {
+            input.flat<float>().data()[3*10*layer+3*icluster+0] = float(0.0);
+            input.flat<float>().data()[3*10*layer+3*icluster+1] = float(0.0);
+            input.flat<float>().data()[3*10*layer+3*icluster+2] = float(0.0);
+          }
+        }
+      }
+
+      tensorflow::run(session, { { "input", input  }}, { "output/Softmax" }, &outputs);
+
+      // print predictions
+      auto prediction = outputs[0].matrix<float>();
+      std::cout << "--" << i << "," << tracksterSumClEnergy << ","  <<prediction(0,0)<< "," << prediction(0,1) << ", " << prediction(0,2) << ", " << prediction(0,3) <<std::endl;
+      // std::cout << "trackster energy " << tracksterSumClEnergy<<" GeV"<< std::endl;
+      // std::cout << "------------------" << std::endl;
+      // std::cout << "  - P electron: " << prediction(0,0) << std::endl;
+      // std::cout << "  - P photon:   " << prediction(0,1) << std::endl;
+      // std::cout << "  - P muon:     " << prediction(0,2) << std::endl;
+      // std::cout << "  - P hadron:   " << prediction(0,3) << std::endl;
+      // std::cout << "------------------" << std::endl;
+      outputs.clear();
+    } else {
+      // std::cout << "trackster energy " << tracksterSumClEnergy<<" GeV,  not input to tensorflow" <<std::endl;
     }
 
-    // tensorflow::Status status = session->Run({ { "layerEnergy", input } },{ "particleId" }, {}, &outputs);
-    tensorflow::run(session, { { "input", input  }}, { "output/Softmax" }, &outputs);
+      
 
-    std::cout << outputs.size() << std::endl;
-    std::cout << "P electron: " << outputs[0].matrix<float>()(0,0) << std::endl;
-    std::cout << "P photon: " << outputs[0].matrix<float>()(0,1) << std::endl;
-    std::cout << "P hadron: " << outputs[0].matrix<float>()(0,2) << std::endl;
-    std::cout << "P muon: " << outputs[0].matrix<float>()(0,3) << std::endl;
-    outputs.clear();
 
   }
   // end of tensorflow session
