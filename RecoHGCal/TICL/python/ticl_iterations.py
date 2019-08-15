@@ -18,7 +18,8 @@ from RecoHGCal.TICL.multiClustersFromTrackstersProducer_cfi import multiClusters
 
 
 def TICL_iterations_withReco(process):
-  process.FEVTDEBUGHLTEventContent.outputCommands.extend(['keep *_MultiClustersFromTracksters*_*_*'])
+#   process.FEVTDEBUGHLTEventContent.outputCommands.extend(['keep *_MultiClustersFromTracksters*_*_*'])
+  process.FEVTDEBUGHLTEventContent.outputCommands.extend(['keep *_Tracksters*_*_*'])
 
   process.TICLLayerTileProducer = ticlLayerTileProducer.clone()
 
